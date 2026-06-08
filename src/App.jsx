@@ -130,6 +130,7 @@ const LongPressable = ({ onLongPress, onClick, children, className, as: Componen
   );
 };
 
+// Faster Uploads: Reduced MAX_WIDTH to 1280px to significantly reduce upload time while maintaining good quality
 const compressImage = (file) => {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -139,8 +140,8 @@ const compressImage = (file) => {
       img.src = event.target.result;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1920; 
-        const MAX_HEIGHT = 1920;
+        const MAX_WIDTH = 1280; // Changed from 1920 for faster upload
+        const MAX_HEIGHT = 1280; // Changed from 1920 for faster upload
         let width = img.width;
         let height = img.height;
 
@@ -154,7 +155,7 @@ const compressImage = (file) => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.85)); 
+        resolve(canvas.toDataURL('image/jpeg', 0.80)); // Slightly compressed quality for faster upload
       };
     };
   });
@@ -345,7 +346,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* Developer Accounts Hint (As requested) */}
       <footer className="shrink-0 pb-2 text-center text-[9px] sm:text-[10px] font-light text-slate-400/50 pointer-events-none select-none">
         DB: imbrushanartslab@gmail.com &nbsp;|&nbsp; Img: Claudinary_pathinanchamathemail@gmail.com
       </footer>
@@ -523,6 +523,13 @@ function ProjectAccordion({ project, theme, index, user, authError, allUpdates, 
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   
+  // States specifically for Full Editing an Update
+  const [editingUpdateId, setEditingUpdateId] = useState(null);
+  const [editUpdateText, setEditUpdateText] = useState('');
+  const [editAttachments, setEditAttachments] = useState([]);
+  const [isEditUploading, setIsEditUploading] = useState(false);
+  const editFileInputRef = useRef(null);
+
   const fileInputRef = useRef(null);
   const isSavingRef = useRef(false);
 
@@ -531,6 +538,7 @@ function ProjectAccordion({ project, theme, index, user, authError, allUpdates, 
 
   const toggleAccordion = () => setIsOpen(!isOpen);
 
+  // --- Handlers for ADDING NEW updates ---
   const handleFileChange = async (e) => {
     setUploadError(null);
     const files = Array.from(e.target.files);
@@ -563,96 +571,6 @@ function ProjectAccordion({ project, theme, index, user, authError, allUpdates, 
   };
 
   const removeAttachment = (indexToRemove) => setAttachments(prev => prev.filter((_, i) => i !== indexToRemove));
-
-  const handleEditProject = () => {
-    setPromptDialog({
-      title: "Edit Project Name",
-      defaultValue: project.name,
-      onConfirm: async (newName) => {
-        setAllProjects(prev => prev.map(p => p.id === project.id ? { ...p, name: newName } : p));
-        if (user && !authError) {
-          try {
-            await updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', project.id), { name: newName });
-          } catch (e) { console.error("Edit failed:", e); }
-        }
-      }
-    });
-  };
-
-  const handleDeleteProject = () => {
-    setConfirmDialog({
-      title: "Delete Project",
-      message: "Are you sure you want to delete this project? This will permanently hide it.",
-      onConfirm: async () => {
-        setAllProjects(prev => prev.filter(p => p.id !== project.id));
-        if (user && !authError) {
-          try {
-            await deleteDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', project.id));
-          } catch (e) { console.error("Delete failed:", e); }
-        }
-      }
-    });
-  };
-
-  const handleEditUpdate = (update) => {
-    setPromptDialog({
-      title: "Edit Update Text",
-      defaultValue: update.text || "",
-      onConfirm: async (newText) => {
-        setLocalUpdates(prev => prev.map(u => u.id === update.id ? { ...u, text: newText } : u));
-        if (user && !authError) {
-          try {
-            await updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates', update.id), { text: newText });
-          } catch (e) { console.error("Edit update failed:", e); }
-        }
-      }
-    });
-  };
-
-  const handleDeleteUpdate = (update) => {
-    setConfirmDialog({
-      title: "Delete Update",
-      message: "Are you sure you want to delete this timeline update from the database?",
-      onConfirm: async () => {
-        setLocalUpdates(prev => prev.filter(u => u.id !== update.id));
-        setAllProjects(prev => prev.map(p => p.id === project.id ? { ...p, updateCount: Math.max(0, (p.updateCount || 0) - 1) } : p));
-
-        if (user && !authError) {
-          try {
-            await deleteDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates', update.id));
-            await updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', project.id), {
-              updateCount: Math.max(0, (project.updateCount || 0) - 1)
-            });
-          } catch (e) { console.error("Delete update failed:", e); }
-        }
-      }
-    });
-  };
-
-  const handleDeleteAttachment = (update, attachmentObj, isLegacyImage = false) => {
-    setConfirmDialog({
-      title: "Remove File",
-      message: "Are you sure you want to remove this file from the update?",
-      onConfirm: async () => {
-        let updatedData = {};
-        if (isLegacyImage) {
-          const newImages = update.images.filter(img => img !== attachmentObj);
-          updatedData = { images: newImages };
-          setLocalUpdates(prev => prev.map(u => u.id === update.id ? { ...u, images: newImages } : u));
-        } else {
-          const newAttachments = update.attachments.filter(att => att.url !== attachmentObj.url);
-          updatedData = { attachments: newAttachments };
-          setLocalUpdates(prev => prev.map(u => u.id === update.id ? { ...u, attachments: newAttachments } : u));
-        }
-        
-        if (user && !authError) {
-          try {
-            await updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates', update.id), updatedData);
-          } catch (e) { console.error("Delete file failed:", e); }
-        }
-      }
-    });
-  };
 
   const handleSaveUpdate = async (e) => {
     e.preventDefault();
@@ -715,6 +633,133 @@ function ProjectAccordion({ project, theme, index, user, authError, allUpdates, 
       isSavingRef.current = false;
       setIsUploading(false);
     }
+  };
+
+  // --- Handlers for FULL EDITING existing updates ---
+  const startEditing = (update) => {
+    setEditingUpdateId(update.id);
+    setEditUpdateText(update.text || '');
+    
+    let existingAtts = [];
+    if (update.images) {
+      existingAtts = [...existingAtts, ...update.images.map(url => ({ type: 'image', url: url, isExisting: true }))];
+    }
+    if (update.attachments) {
+      existingAtts = [...existingAtts, ...update.attachments.map(att => ({ ...att, isExisting: true }))];
+    }
+    setEditAttachments(existingAtts);
+  };
+
+  const cancelEditing = () => {
+    setEditingUpdateId(null);
+    setEditUpdateText('');
+    setEditAttachments([]);
+  };
+
+  const handleEditFileChange = async (e) => {
+    const files = Array.from(e.target.files);
+    let newFiles = [];
+    
+    for (const file of files) {
+      try {
+        if (file.type === 'application/pdf') {
+          if (file.size > 2097152) continue; // skip large PDFs
+          const base64Data = await fileToBase64(file);
+          newFiles.push({ type: 'pdf', data: base64Data, name: file.name, isExisting: false });
+        } else if (file.type.startsWith('image/')) {
+          const compressedBase64 = await compressImage(file);
+          newFiles.push({ type: 'image', data: compressedBase64, name: file.name, isExisting: false });
+        }
+      } catch (err) {
+        console.error("Failed to process edit file", err);
+      }
+    }
+    setEditAttachments(prev => [...prev, ...newFiles]);
+    if (editFileInputRef.current) editFileInputRef.current.value = '';
+  };
+
+  const removeEditAttachment = (indexToRemove) => setEditAttachments(prev => prev.filter((_, i) => i !== indexToRemove));
+
+  const submitEdit = async (e) => {
+    e.preventDefault();
+    if ((!editUpdateText.trim() && editAttachments.length === 0) || isEditUploading) return;
+    setIsEditUploading(true);
+
+    try {
+      let finalAttachments = [];
+      if (user && !authError) {
+        const uploadPromises = editAttachments.map(att => {
+          if (att.isExisting) return Promise.resolve({ type: att.type, url: att.url, name: att.name });
+          return uploadToCloudinary(att.data).then(url => ({ type: att.type, url: url, name: att.name }))
+            .catch(err => ({ type: att.type, url: att.data, name: att.name }));
+        });
+        finalAttachments = await Promise.all(uploadPromises);
+
+        await updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates', editingUpdateId), {
+          text: editUpdateText,
+          attachments: finalAttachments,
+          images: [] // Wipe legacy images array as they are now in attachments
+        });
+      } else {
+        // Local fallback
+        finalAttachments = editAttachments.map(att => att.isExisting ? att : { type: att.type, url: att.data, name: att.name });
+        setLocalUpdates(prev => prev.map(u => u.id === editingUpdateId ? { ...u, text: editUpdateText, attachments: finalAttachments, images: [] } : u));
+      }
+    } catch (e) {
+      console.error("Full edit failed:", e);
+    } finally {
+      setIsEditUploading(false);
+      setEditingUpdateId(null);
+    }
+  };
+
+  // --- Utility actions ---
+  const handleEditProject = () => {
+    setPromptDialog({
+      title: "Edit Project Name",
+      defaultValue: project.name,
+      onConfirm: async (newName) => {
+        setAllProjects(prev => prev.map(p => p.id === project.id ? { ...p, name: newName } : p));
+        if (user && !authError) {
+          try { await updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', project.id), { name: newName }); } 
+          catch (e) { console.error("Edit failed:", e); }
+        }
+      }
+    });
+  };
+
+  const handleDeleteProject = () => {
+    setConfirmDialog({
+      title: "Delete Project",
+      message: "Are you sure you want to delete this project? This will permanently hide it.",
+      onConfirm: async () => {
+        setAllProjects(prev => prev.filter(p => p.id !== project.id));
+        if (user && !authError) {
+          try { await deleteDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', project.id)); } 
+          catch (e) { console.error("Delete failed:", e); }
+        }
+      }
+    });
+  };
+
+  const handleDeleteUpdate = (update) => {
+    setConfirmDialog({
+      title: "Delete Update",
+      message: "Are you sure you want to delete this timeline update from the database?",
+      onConfirm: async () => {
+        setLocalUpdates(prev => prev.filter(u => u.id !== update.id));
+        setAllProjects(prev => prev.map(p => p.id === project.id ? { ...p, updateCount: Math.max(0, (p.updateCount || 0) - 1) } : p));
+
+        if (user && !authError) {
+          try {
+            await deleteDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates', update.id));
+            await updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', project.id), {
+              updateCount: Math.max(0, (project.updateCount || 0) - 1)
+            });
+          } catch (e) { console.error("Delete update failed:", e); }
+        }
+      }
+    });
   };
 
   const formatDate = (dateString) => new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -789,41 +834,86 @@ function ProjectAccordion({ project, theme, index, user, authError, allUpdates, 
                 {sortedUpdates.map((update) => (
                   <div key={update.id} className="relative pl-5 sm:pl-8">
                     <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-white border-2 border-indigo-500 shadow-sm z-10 flex items-center justify-center"><div className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></div></div>
-                    <LongPressable
-                      onLongPress={() => setActionMenu({ title: "Update Options", options: [{ label: "Edit Text", icon: <Edit3 className="w-4 h-4"/>, onClick: () => handleEditUpdate(update) }, { label: "Delete Update", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDeleteUpdate(update) }]})}
-                      className="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-100 select-none touch-manipulation hover:bg-slate-50 cursor-pointer"
-                    >
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded flex-shrink-0"><CheckCircle2 className="w-3 h-3" /> Published</span>
-                        <span className="text-[10px] sm:text-xs font-medium text-slate-400">{formatDate(update.timestamp)} • {formatTime(update.timestamp)}</span>
+                    
+                    {/* Full Edit Mode Inline Form */}
+                    {editingUpdateId === update.id ? (
+                      <div className="bg-indigo-50/60 p-3 sm:p-4 rounded-xl shadow-inner border border-indigo-100 animate-in fade-in zoom-in-95">
+                        <h5 className="text-xs font-bold text-indigo-700 mb-2 flex items-center gap-1"><Edit3 className="w-3.5 h-3.5"/> Edit Update</h5>
+                        <form onSubmit={submitEdit}>
+                          <textarea 
+                            className="w-full bg-white border border-indigo-200 rounded-lg p-3 min-h-[80px] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y text-sm text-slate-700" 
+                            value={editUpdateText} 
+                            onChange={(e) => setEditUpdateText(e.target.value)} 
+                            disabled={isEditUploading}
+                          />
+                          {editAttachments.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {editAttachments.map((file, i) => (
+                                <div key={i} className="relative inline-block rounded-md overflow-hidden border border-indigo-200 shadow-sm group">
+                                  {file.type === 'pdf' ? (
+                                    <div className="h-10 w-10 sm:h-12 sm:w-12 bg-white flex items-center justify-center"><FileText className="w-6 h-6 text-red-500" /></div>
+                                  ) : (
+                                    <img src={file.url || file.data} alt={`Edit Preview ${i}`} className="h-10 w-10 sm:h-12 sm:w-12 object-cover bg-white" />
+                                  )}
+                                  <button type="button" onClick={() => removeEditAttachment(i)} disabled={isEditUploading} className="absolute top-0.5 right-0.5 bg-slate-900/60 text-white p-0.5 rounded-full hover:bg-red-500 disabled:opacity-50"><X className="w-3 h-3" /></button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="mt-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                            <div>
+                              <input type="file" accept="image/*,application/pdf" multiple className="hidden" ref={editFileInputRef} onChange={handleEditFileChange} disabled={isEditUploading} />
+                              <button type="button" onClick={() => editFileInputRef.current?.click()} disabled={isEditUploading} className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 px-3 py-2 rounded-md transition-colors"><Paperclip className="w-3.5 h-3.5" /> Add Files</button>
+                            </div>
+                            <div className="flex gap-2 w-full sm:w-auto justify-end">
+                              <button type="button" onClick={cancelEditing} disabled={isEditUploading} className="text-xs font-semibold text-slate-500 hover:text-slate-700 px-3 py-2">Cancel</button>
+                              <button type="submit" disabled={isEditUploading} className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md font-semibold text-xs transition-colors">
+                                {isEditUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Save Changes'}
+                              </button>
+                            </div>
+                          </div>
+                        </form>
                       </div>
-                      {update.text && <div className="text-slate-700 whitespace-pre-wrap leading-relaxed text-xs sm:text-sm">{update.text}</div>}
-                      {( (update.images && update.images.length > 0) || (update.attachments && update.attachments.length > 0) ) && (
-                        <div className="mt-3 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
-                          {update.images && update.images.map((imgUrl, i) => (
-                            <LongPressable as="button" key={`legacy-${i}`} onLongPress={() => setActionMenu({ title: "Image Options", options: [{ label: "Remove Image", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDeleteAttachment(update, imgUrl, true) }]})} onClick={() => setExpandedImage(imgUrl)} className="relative group flex items-center justify-center bg-slate-50 border border-slate-200 rounded-md overflow-hidden shadow-sm hover:shadow-md h-10 w-10 sm:h-14 sm:w-14">
-                              <img src={imgUrl} alt={`Attachment ${i}`} className="w-full h-full object-cover pointer-events-none" />
-                            </LongPressable>
-                          ))}
-                          {update.attachments && update.attachments.map((att, i) => {
-                            if (att.type === 'pdf') {
-                              return (
-                                <LongPressable key={`att-${i}`} as="div" onLongPress={() => setActionMenu({ title: "PDF Options", options: [{ label: "Remove PDF", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDeleteAttachment(update, att, false) }]})} className="flex items-center gap-2 bg-red-50 border border-red-100 px-3 py-2 rounded-lg group max-w-full">
-                                  <FileText className="w-5 h-5 text-red-500 flex-shrink-0" />
-                                  <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-xs sm:text-sm font-semibold text-red-700 hover:text-red-800 underline truncate max-w-[150px] sm:max-w-[200px]" onClick={e => e.stopPropagation()}>{att.name || "Document.pdf"}</a>
-                                </LongPressable>
-                              );
-                            } else {
-                              return (
-                                <LongPressable as="button" key={`att-${i}`} onLongPress={() => setActionMenu({ title: "Image Options", options: [{ label: "Remove Image", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDeleteAttachment(update, att, false) }]})} onClick={() => setExpandedImage(att.url)} className="relative group flex items-center justify-center bg-slate-50 border border-slate-200 rounded-md overflow-hidden shadow-sm hover:shadow-md h-10 w-10 sm:h-14 sm:w-14">
-                                  <img src={att.url} alt={`Attachment ${i}`} className="w-full h-full object-cover pointer-events-none" />
-                                </LongPressable>
-                              );
-                            }
-                          })}
+                    ) : (
+                      <LongPressable
+                        onLongPress={() => setActionMenu({ title: "Update Options", options: [
+                          { label: "Edit Update", icon: <Edit3 className="w-4 h-4"/>, onClick: () => startEditing(update) }, 
+                          { label: "Delete Update", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDeleteUpdate(update) }
+                        ]})}
+                        className="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-100 select-none touch-manipulation hover:bg-slate-50 cursor-pointer transition-colors"
+                      >
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded flex-shrink-0"><CheckCircle2 className="w-3 h-3" /> Published</span>
+                          <span className="text-[10px] sm:text-xs font-medium text-slate-400">{formatDate(update.timestamp)} • {formatTime(update.timestamp)}</span>
                         </div>
-                      )}
-                    </LongPressable>
+                        {update.text && <div className="text-slate-700 whitespace-pre-wrap leading-relaxed text-xs sm:text-sm">{update.text}</div>}
+                        {( (update.images && update.images.length > 0) || (update.attachments && update.attachments.length > 0) ) && (
+                          <div className="mt-3 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+                            {update.images && update.images.map((imgUrl, i) => (
+                              <button key={`legacy-${i}`} onClick={() => setExpandedImage(imgUrl)} className="relative group flex items-center justify-center bg-slate-50 border border-slate-200 rounded-md overflow-hidden shadow-sm hover:shadow-md h-10 w-10 sm:h-14 sm:w-14">
+                                <img src={imgUrl} alt={`Attachment ${i}`} className="w-full h-full object-cover pointer-events-none" />
+                              </button>
+                            ))}
+                            {update.attachments && update.attachments.map((att, i) => {
+                              if (att.type === 'pdf') {
+                                return (
+                                  <div key={`att-${i}`} className="flex items-center gap-2 bg-red-50 border border-red-100 px-3 py-2 rounded-lg group max-w-full">
+                                    <FileText className="w-5 h-5 text-red-500 flex-shrink-0" />
+                                    <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-xs sm:text-sm font-semibold text-red-700 hover:text-red-800 underline truncate max-w-[150px] sm:max-w-[200px]" onClick={e => e.stopPropagation()}>{att.name || "Document.pdf"}</a>
+                                  </div>
+                                );
+                              } else {
+                                return (
+                                  <button key={`att-${i}`} onClick={() => setExpandedImage(att.url)} className="relative group flex items-center justify-center bg-slate-50 border border-slate-200 rounded-md overflow-hidden shadow-sm hover:shadow-md h-10 w-10 sm:h-14 sm:w-14">
+                                    <img src={att.url} alt={`Attachment ${i}`} className="w-full h-full object-cover pointer-events-none" />
+                                  </button>
+                                );
+                              }
+                            })}
+                          </div>
+                        )}
+                      </LongPressable>
+                    )}
                   </div>
                 ))}
               </div>
@@ -832,11 +922,18 @@ function ProjectAccordion({ project, theme, index, user, authError, allUpdates, 
         </div>
       )}
 
+      {/* FIXED IMAGE POPUP WITH EXPLICIT CLOSE BUTTON */}
       {expandedImage && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm" onClick={() => setExpandedImage(null)}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md" onClick={() => setExpandedImage(null)}>
+          <button 
+            onClick={() => setExpandedImage(null)} 
+            className="absolute top-4 right-4 sm:top-6 sm:right-6 z-[110] p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors shadow-lg"
+            title="Close Image"
+          >
+            <X className="w-6 h-6" />
+          </button>
           <div className="relative max-w-5xl w-full max-h-full flex items-center justify-center" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setExpandedImage(null)} className="absolute -top-12 right-0 sm:-right-12 sm:top-0 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full"><X className="w-6 h-6" /></button>
-            <img src={expandedImage} alt="Expanded Attachment" className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl" />
+            <img src={expandedImage} alt="Expanded Attachment" className="max-w-full max-h-[90vh] object-contain rounded-lg" />
           </div>
         </div>
       )}
