@@ -1,16 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Building2, Map, MapPin, Tent, Trees, Home, 
   X, Plus, ChevronDown, Image as ImageIcon, 
-  Send, Calendar, Clock, CheckCircle2, FileText, Loader2, AlertTriangle, HelpCircle
+  Send, Calendar, Clock, CheckCircle2, FileText, Loader2, AlertTriangle, HelpCircle,
+  Edit3, Trash2
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from "firebase/app";
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "firebase/auth";
-import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
+import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc } from "firebase/firestore";
+import { getStorage, ref, uploadString, getDownloadURL, deleteObject } from "firebase/storage";
 
-// --- FIREBASE CONFIGURATION ---
 const firebaseConfig = {
   apiKey: "AIzaSyAxL8ejtFBr7m7OJ8gYgd1NpyluwGpiZgA",
   authDomain: "tanur-project-tracker.firebaseapp.com",
@@ -20,12 +21,12 @@ const firebaseConfig = {
   appId: "1:1033537596014:web:88d2ea52b4ff5f08a9947f"
 };
 
-// Initialize Firebase App safely
-let app, auth, db;
+let app, auth, db, storage;
 try {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
+  storage = getStorage(app);
 } catch (e) {
   console.error("Firebase init failed:", e);
 }
@@ -33,7 +34,26 @@ try {
 // Derive a safe App ID for Canvas environments
 const CANVAS_APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'tanur-tracker-default';
 
-// --- CONSTANTS ---
+const uploadImageToStorage = async (base64Str, updateId, index) => {
+  if (!storage) throw new Error("Storage not initialized");
+  const imageRef = ref(storage, `artifacts/${CANVAS_APP_ID}/images/${updateId}_${index}.jpg`);
+  await uploadString(imageRef, base64Str, 'data_url');
+  return await getDownloadURL(imageRef);
+};
+
+const deleteImageFromStorage = async (url) => {
+  if (!storage || !url) return;
+  // Safely check if it resides in Firebase Storage before trying to delete
+  if (url.includes("firebasestorage.googleapis.com")) {
+    try {
+      const fileRef = ref(storage, url);
+      await deleteObject(fileRef);
+    } catch (err) {
+      console.warn("Failed to delete storage file:", err);
+    }
+  }
+};
+
 const INITIAL_LOCAL_BODIES = [
   { id: 'tanur', name: 'Tanur Municipality', color: 'from-indigo-500 to-purple-600', theme: 'indigo', icon: Building2 },
   { id: 'ozhur', name: 'Ozhur', color: 'from-emerald-400 to-green-600', theme: 'emerald', icon: Trees },
@@ -52,7 +72,56 @@ const THEME_MAP = {
   teal: { light: 'bg-teal-50 border-teal-100', dark: 'bg-teal-100/60 border-teal-200', text: 'text-teal-800' },
 };
 
-// Image Compression Utility (Crucial for Firestore 1MB limits)
+const useLongPress = (callback, ms = 600) => {
+  const timerRef = useRef();
+  const isLongPress = useRef(false);
+
+  const start = useCallback((e) => {
+    isLongPress.current = false;
+    timerRef.current = setTimeout(() => {
+      isLongPress.current = true;
+      callback(e);
+    }, ms);
+  }, [callback, ms]);
+
+  const stop = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
+
+  const onClickHandler = useCallback((e, defaultClick) => {
+    if (isLongPress.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (defaultClick) defaultClick(e);
+  }, []);
+
+  return {
+    onMouseDown: start,
+    onMouseUp: stop,
+    onMouseLeave: stop,
+    onTouchStart: start,
+    onTouchEnd: stop,
+    onClickHandler
+  };
+};
+
+const LongPressable = ({ onLongPress, onClick, children, className, as: Component = 'div' }) => {
+  const longPressProps = useLongPress(onLongPress);
+  return (
+    <Component 
+      className={className} 
+      {...longPressProps} 
+      onClick={(e) => longPressProps.onClickHandler(e, onClick)}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onLongPress(e); }} 
+    >
+      {children}
+    </Component>
+  );
+};
+
+// Image Compression Utility (Crucial for keeping images tiny and fast)
 const compressImage = (file) => {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -94,9 +163,8 @@ export default function App() {
 
   // Fallback Local Memory State (so the app works immediately if auth fails!)
   const [allProjects, setAllProjects] = useState([]); 
-  const [localUpdates, setLocalUpdates] = useState({}); // For offline preview fallback
+  const [localUpdates, setLocalUpdates] = useState([]); // Array of updates for local fallback
 
-  // --- FIREBASE: Auth & Initial Data Load ---
   useEffect(() => {
     const link = document.createElement('link');
     link.href = 'https://fonts.googleapis.com/css2?family=Noto+Serif+Malayalam:wght@400;600;700&family=Sora:wght@300;400;600;700&display=swap';
@@ -111,14 +179,18 @@ export default function App() {
     const initAuth = async () => {
       try {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
+          try {
+            await signInWithCustomToken(auth, __initial_auth_token);
+          } catch (tokenError) {
+            console.warn("Custom token failed, falling back to Anonymous Auth:", tokenError);
+            await signInAnonymously(auth);
+          }
         } else {
           await signInAnonymously(auth);
         }
         setAuthError(null);
       } catch (error) {
         console.error("Auth Error:", error);
-        // Set the error state so we can display helpful setup guidelines
         setAuthError(error.code || error.message);
       }
     };
@@ -134,7 +206,6 @@ export default function App() {
     return () => unsubscribeAuth();
   }, []);
 
-  // 2. Fetch lightweight project summaries (Real-time Firebase mode)
   useEffect(() => {
     if (!user || authError) return;
 
@@ -154,7 +225,6 @@ export default function App() {
     return () => unsubscribeProjects();
   }, [user, authError]);
 
-  // --- Handlers ---
   const handleOpenBody = (body) => setActiveBody(body);
   const handleCloseBody = () => setActiveBody(null);
 
@@ -168,16 +238,13 @@ export default function App() {
       updateCount: 0
     };
 
-    // If Auth Failed, Fallback gracefully to offline state
     if (!user || authError) {
       setAllProjects(prev => [projectData, ...prev]);
-      setLocalUpdates(prev => ({ ...prev, [projectId]: [] }));
       return;
     }
 
     try {
       await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', projectId), projectData);
-      await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates', projectId), { updates: [] });
     } catch (err) {
       console.error("Error adding project:", err);
     }
@@ -255,9 +322,8 @@ export default function App() {
           <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-800 text-xs px-4 py-2.5 rounded-xl max-w-7xl w-full flex justify-between items-center">
             <span className="flex items-center gap-2">
               <HelpCircle className="w-4 h-4 flex-shrink-0" />
-              <span><strong>Previewing Locally:</strong> Firebase needs Anonymous Auth configured. The application is completely interactive in offline preview mode!</span>
+              <span><strong>Connected Anonymously:</strong> A custom token error occurred, but the system safely routed to Anonymous Sign-In to ensure a working connection!</span>
             </span>
-            <button onClick={() => setShowSetupGuide(true)} className="underline font-bold hover:text-amber-950 ml-2">Show Instructions</button>
           </div>
         )}
 
@@ -309,17 +375,46 @@ export default function App() {
   );
 }
 
-// --- Subcomponents ---
-
 function ProjectModal({ body, onClose, projects, onAddProject, user, authError, localUpdates, setLocalUpdates, setAllProjects }) {
   const [isAddingProject, setIsAddingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
+  const [allUpdates, setAllUpdates] = useState([]);
+  const [isLoadingUpdates, setIsLoadingUpdates] = useState(false);
+
+  // Actions & Dialog State
+  const [actionMenu, setActionMenu] = useState(null); 
+  const [confirmDialog, setConfirmDialog] = useState(null);
+  const [promptDialog, setPromptDialog] = useState(null);
 
   useEffect(() => {
     const handleEsc = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
   }, [onClose]);
+
+  useEffect(() => {
+    if (!user || authError) {
+      setAllUpdates(localUpdates);
+      return;
+    }
+
+    setIsLoadingUpdates(true);
+    const updatesRef = collection(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates');
+    
+    const unsubscribe = onSnapshot(updatesRef, (snapshot) => {
+      const updatesData = [];
+      snapshot.forEach(doc => {
+        updatesData.push({ id: doc.id, ...doc.data() });
+      });
+      setAllUpdates(updatesData);
+      setIsLoadingUpdates(false);
+    }, (error) => {
+      console.error("Error fetching updates:", error);
+      setIsLoadingUpdates(false);
+    });
+
+    return () => unsubscribe();
+  }, [user, authError, localUpdates]);
 
   const handleCreateProject = (e) => {
     e.preventDefault();
@@ -402,64 +497,106 @@ function ProjectModal({ body, onClose, projects, onAddProject, user, authError, 
                   index={index}
                   user={user}
                   authError={authError}
-                  localUpdates={localUpdates}
+                  allUpdates={allUpdates.filter(u => u.projectId === project.id)}
+                  isLoadingUpdates={isLoadingUpdates}
                   setLocalUpdates={setLocalUpdates}
                   setAllProjects={setAllProjects}
+                  setActionMenu={setActionMenu}
+                  setConfirmDialog={setConfirmDialog}
+                  setPromptDialog={setPromptDialog}
                 />
               ))
             )}
           </div>
         </div>
+
+        {/* --- ACTION MENUS & CUSTOM MODALS --- */}
+        {actionMenu && (
+          <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setActionMenu(null)}>
+            <div className="bg-white w-full sm:max-w-sm rounded-2xl p-2 shadow-2xl animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95" onClick={e => e.stopPropagation()}>
+              <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center">
+                <h3 className="font-bold text-slate-800 text-sm">{actionMenu.title}</h3>
+                <button onClick={() => setActionMenu(null)} className="p-1 rounded-full hover:bg-slate-100 text-slate-500"><X className="w-4 h-4"/></button>
+              </div>
+              <div className="p-2 flex flex-col gap-1">
+                {actionMenu.options.map((opt, i) => (
+                  <button 
+                    key={i}
+                    onClick={() => { setActionMenu(null); opt.onClick(); }}
+                    className={`flex items-center gap-3 w-full text-left px-4 py-3 rounded-xl transition-colors text-sm font-medium ${opt.danger ? 'text-red-600 hover:bg-red-50' : 'text-slate-700 hover:bg-slate-100'}`}
+                  >
+                    {opt.icon} {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Confirm Dialog */}
+        {confirmDialog && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => setConfirmDialog(null)}>
+            <div className="bg-white max-w-sm w-full rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="text-red-500 mb-4"><AlertTriangle className="w-10 h-10" /></div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">{confirmDialog.title}</h3>
+              <p className="text-sm text-slate-600 mb-6">{confirmDialog.message}</p>
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setConfirmDialog(null)} className="px-4 py-2 rounded-lg font-semibold text-slate-600 hover:bg-slate-100 text-sm transition-colors">Cancel</button>
+                <button 
+                  onClick={() => { confirmDialog.onConfirm(); setConfirmDialog(null); }} 
+                  className="px-4 py-2 rounded-lg font-semibold bg-red-600 hover:bg-red-700 text-white text-sm transition-colors shadow-sm"
+                >
+                  Confirm Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Prompt Dialog */}
+        {promptDialog && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => setPromptDialog(null)}>
+            <div className="bg-white max-w-md w-full rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-slate-900 mb-4">{promptDialog.title}</h3>
+              <textarea 
+                autoFocus
+                className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[100px] text-slate-700"
+                defaultValue={promptDialog.defaultValue}
+                id="promptInput"
+              />
+              <div className="flex gap-3 justify-end mt-4">
+                <button onClick={() => setPromptDialog(null)} className="px-4 py-2 rounded-lg font-semibold text-slate-600 hover:bg-slate-100 text-sm transition-colors">Cancel</button>
+                <button 
+                  onClick={() => { 
+                    const val = document.getElementById('promptInput').value;
+                    if(val.trim()) { promptDialog.onConfirm(val.trim()); setPromptDialog(null); }
+                  }} 
+                  className="px-4 py-2 rounded-lg font-semibold bg-indigo-600 hover:bg-indigo-700 text-white text-sm transition-colors shadow-sm"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
 }
 
-function ProjectAccordion({ project, theme, index, user, authError, localUpdates, setLocalUpdates, setAllProjects }) {
+function ProjectAccordion({ project, theme, index, user, authError, allUpdates, isLoadingUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog }) {
   const [isOpen, setIsOpen] = useState(false);
   const [updateText, setUpdateText] = useState('');
   const [imagePreviews, setImagePreviews] = useState([]);
   const [expandedImage, setExpandedImage] = useState(null);
-  
-  // Lazy Loaded Data
-  const [timelineUpdates, setTimelineUpdates] = useState([]);
-  const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   
   const fileInputRef = useRef(null);
   const isSavingRef = useRef(false);
 
   const themeStyles = THEME_MAP[theme] || THEME_MAP.indigo;
   const cardColorClass = index % 2 === 0 ? themeStyles.light : themeStyles.dark;
-
-  // FETCH TIMELINE (With offline fallback detection)
-  useEffect(() => {
-    if (!isOpen) return;
-
-    // Use memory fallback
-    if (!user || authError) {
-      setTimelineUpdates(localUpdates[project.id] || []);
-      return;
-    }
-
-    setIsLoadingTimeline(true);
-    const updatesDocRef = doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates', project.id);
-    
-    const unsubscribe = onSnapshot(updatesDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        const sortedUpdates = (data.updates || []).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        setTimelineUpdates(sortedUpdates);
-      } else {
-        setTimelineUpdates([]);
-      }
-      setIsLoadingTimeline(false);
-    }, (error) => {
-      console.error("Error fetching updates:", error);
-      setIsLoadingTimeline(false);
-    });
-
-    return () => unsubscribe();
-  }, [isOpen, user, project.id, authError, localUpdates]);
 
   const toggleAccordion = () => setIsOpen(!isOpen);
 
@@ -483,58 +620,156 @@ function ProjectAccordion({ project, theme, index, user, authError, localUpdates
     setImagePreviews(prev => prev.filter((_, i) => i !== indexToRemove));
   };
 
+  const handleEditProject = () => {
+    setPromptDialog({
+      title: "Edit Project Name",
+      defaultValue: project.name,
+      onConfirm: async (newName) => {
+        if (!user || authError) {
+          setAllProjects(prev => prev.map(p => p.id === project.id ? { ...p, name: newName } : p));
+          return;
+        }
+        try {
+          await updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', project.id), { name: newName });
+        } catch (e) { console.error("Edit failed:", e); }
+      }
+    });
+  };
+
+  const handleDeleteProject = () => {
+    setConfirmDialog({
+      title: "Delete Project",
+      message: "Are you sure you want to delete this project? This will permanently hide it.",
+      onConfirm: async () => {
+        if (!user || authError) {
+          setAllProjects(prev => prev.filter(p => p.id !== project.id));
+          return;
+        }
+        try {
+          await deleteDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', project.id));
+        } catch (e) { console.error("Delete failed:", e); }
+      }
+    });
+  };
+
+  const handleEditUpdate = (update) => {
+    setPromptDialog({
+      title: "Edit Update Text",
+      defaultValue: update.text || "",
+      onConfirm: async (newText) => {
+        if (!user || authError) {
+          setLocalUpdates(prev => prev.map(u => u.id === update.id ? { ...u, text: newText } : u));
+          return;
+        }
+        try {
+          await updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates', update.id), { text: newText });
+        } catch (e) { console.error("Edit update failed:", e); }
+      }
+    });
+  };
+
+  const handleDeleteUpdate = (update) => {
+    setConfirmDialog({
+      title: "Delete Update",
+      message: "Are you sure you want to delete this timeline update? Images linked to this update will be deleted from cloud storage to save space.",
+      onConfirm: async () => {
+        if (!user || authError) {
+          setLocalUpdates(prev => prev.filter(u => u.id !== update.id));
+          setAllProjects(prev => prev.map(p => p.id === project.id ? { ...p, updateCount: Math.max(0, (p.updateCount || 0) - 1) } : p));
+          return;
+        }
+        try {
+          // Clean up Firebase Storage images
+          if (update.images && update.images.length > 0) {
+            for (const imgUrl of update.images) {
+              await deleteImageFromStorage(imgUrl);
+            }
+          }
+          await deleteDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates', update.id));
+          await updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', project.id), {
+            updateCount: Math.max(0, (project.updateCount || 0) - 1)
+          });
+        } catch (e) { console.error("Delete update failed:", e); }
+      }
+    });
+  };
+
+  const handleDeleteImage = (update, imageIndex) => {
+    setConfirmDialog({
+      title: "Delete Image",
+      message: "Are you sure you want to remove this image? It will be permanently deleted from cloud storage.",
+      onConfirm: async () => {
+        const imageToDelete = update.images[imageIndex];
+        const newImages = update.images.filter((_, i) => i !== imageIndex);
+        if (!user || authError) {
+          setLocalUpdates(prev => prev.map(u => u.id === update.id ? { ...u, images: newImages } : u));
+          return;
+        }
+        try {
+          // Delete physical file from Cloud Storage
+          await deleteImageFromStorage(imageToDelete);
+          // Update Firestore
+          await updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates', update.id), { images: newImages });
+        } catch (e) { console.error("Delete image failed:", e); }
+      }
+    });
+  };
+
   const handleSaveUpdate = async (e) => {
     e.preventDefault();
     if ((!updateText.trim() && imagePreviews.length === 0) || isSavingRef.current) return;
     
     isSavingRef.current = true;
+    setIsUploading(true);
     
-    const newUpdate = {
-      id: `upd_${Date.now()}_${Math.random().toString(36).substring(2,9)}`,
-      text: updateText,
-      images: imagePreviews,
-      timestamp: new Date().toISOString()
-    };
-
-    // --- FALLBACK IN-MEMORY MODE SAVE ---
-    if (!user || authError) {
-      const updatedUpdates = [newUpdate, ...(localUpdates[project.id] || [])];
-      setLocalUpdates(prev => ({
-        ...prev,
-        [project.id]: updatedUpdates
-      }));
-      setTimelineUpdates(updatedUpdates);
-      setAllProjects(prev => prev.map(p => {
-        if (p.id === project.id) {
-          return { ...p, updateCount: updatedUpdates.length };
-        }
-        return p;
-      }));
-
-      // Clear Form
-      setUpdateText('');
-      setImagePreviews([]);
-      isSavingRef.current = false;
-      return;
-    }
-
-    // --- FIREBASE CLOUD SAVE ---
-    const updatesDocRef = doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates', project.id);
-    const projectMetaRef = doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', project.id);
+    const updateId = `upd_${Date.now()}_${Math.random().toString(36).substring(2,9)}`;
 
     try {
-      const docSnap = await getDoc(updatesDocRef);
-      let newCount = 1;
-      
-      if (docSnap.exists()) {
-        const currentUpdates = docSnap.data().updates || [];
-        await setDoc(updatesDocRef, { updates: [newUpdate, ...currentUpdates] });
-        newCount = currentUpdates.length + 1;
+      let uploadedUrls = [];
+
+      // 1. Upload images to Firebase Storage first (if online), else fallback to base64
+      if (user && !authError && storage) {
+        for (let i = 0; i < imagePreviews.length; i++) {
+          const url = await uploadImageToStorage(imagePreviews[i], updateId, i);
+          uploadedUrls.push(url);
+        }
       } else {
-        await setDoc(updatesDocRef, { updates: [newUpdate] });
+        uploadedUrls = [...imagePreviews];
       }
 
-      await updateDoc(projectMetaRef, { updateCount: newCount });
+      const newUpdate = {
+        id: updateId,
+        projectId: project.id,
+        text: updateText,
+        images: uploadedUrls, // Publicly consumable storage URLs
+        timestamp: new Date().toISOString()
+      };
+
+      // --- FALLBACK IN-MEMORY MODE SAVE ---
+      if (!user || authError) {
+        setLocalUpdates(prev => [newUpdate, ...prev]);
+        setAllProjects(prev => prev.map(p => {
+          if (p.id === project.id) {
+            return { ...p, updateCount: (p.updateCount || 0) + 1 };
+          }
+          return p;
+        }));
+
+        // Clear Form
+        setUpdateText('');
+        setImagePreviews([]);
+        return;
+      }
+
+      // --- FIREBASE CLOUD SAVE ---
+      const updateDocRef = doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates', updateId);
+      const projectMetaRef = doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', project.id);
+
+      // Store individual update document safely
+      await setDoc(updateDocRef, newUpdate);
+
+      // Increment updateCount on project metadata
+      await updateDoc(projectMetaRef, { updateCount: (project.updateCount || 0) + 1 });
 
       // Clear Form
       setUpdateText('');
@@ -543,18 +778,32 @@ function ProjectAccordion({ project, theme, index, user, authError, localUpdates
       console.error("Error saving update to Firebase:", err);
     } finally {
       isSavingRef.current = false;
+      setIsUploading(false);
     }
   };
 
   const formatDate = (dateString) => new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const formatTime = (dateString) => new Date(dateString).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
+  // Sort updates by newest first in memory
+  const sortedUpdates = [...allUpdates].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
   return (
     <div className={`rounded-xl border shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md ${cardColorClass}`}>
       {/* Accordion Header */}
-      <button 
+      <LongPressable 
+        as="button"
+        onLongPress={(e) => {
+          setActionMenu({
+            title: "Project Options",
+            options: [
+              { label: "Edit Project Name", icon: <Edit3 className="w-4 h-4"/>, onClick: handleEditProject },
+              { label: "Delete Project", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: handleDeleteProject }
+            ]
+          });
+        }}
         onClick={toggleAccordion}
-        className="w-full px-4 sm:px-5 py-3 sm:py-4 flex items-center justify-between bg-transparent hover:bg-black/5 transition-colors text-left"
+        className="w-full px-4 sm:px-5 py-3 sm:py-4 flex items-center justify-between bg-transparent hover:bg-black/5 transition-colors text-left select-none touch-manipulation cursor-pointer"
       >
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-white/60 shadow-sm hidden sm:block">
@@ -575,7 +824,7 @@ function ProjectAccordion({ project, theme, index, user, authError, localUpdates
             <ChevronDown className="w-4 h-4" />
           </div>
         </div>
-      </button>
+      </LongPressable>
 
       {/* Accordion Body */}
       {isOpen && (
@@ -590,6 +839,7 @@ function ProjectAccordion({ project, theme, index, user, authError, localUpdates
                 placeholder="What's the latest update?"
                 value={updateText}
                 onChange={(e) => setUpdateText(e.target.value)}
+                disabled={isUploading}
               />
               
               {imagePreviews.length > 0 && (
@@ -600,7 +850,8 @@ function ProjectAccordion({ project, theme, index, user, authError, localUpdates
                       <button 
                         type="button" 
                         onClick={() => removeImage(i)}
-                        className="absolute top-0.5 right-0.5 bg-slate-900/60 text-white p-0.5 rounded-full hover:bg-red-500 transition-colors backdrop-blur-sm"
+                        disabled={isUploading}
+                        className="absolute top-0.5 right-0.5 bg-slate-900/60 text-white p-0.5 rounded-full hover:bg-red-500 transition-colors backdrop-blur-sm disabled:opacity-50"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -611,11 +862,12 @@ function ProjectAccordion({ project, theme, index, user, authError, localUpdates
 
               <div className="mt-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
                 <div>
-                  <input type="file" accept="image/*" multiple className="hidden" ref={fileInputRef} onChange={handleImageChange} />
+                  <input type="file" accept="image/*" multiple className="hidden" ref={fileInputRef} onChange={handleImageChange} disabled={isUploading} />
                   <button 
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50 px-3 py-2 rounded-md transition-colors"
+                    disabled={isUploading}
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50 px-3 py-2 rounded-md transition-colors disabled:opacity-50"
                   >
                     <ImageIcon className="w-3.5 h-3.5" /> Attach Images
                   </button>
@@ -623,31 +875,34 @@ function ProjectAccordion({ project, theme, index, user, authError, localUpdates
                 
                 <button 
                   type="submit"
-                  disabled={!updateText.trim() && imagePreviews.length === 0}
+                  disabled={(!updateText.trim() && imagePreviews.length === 0) || isUploading}
                   className="flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md font-semibold transition-all shadow-sm active:scale-95 text-xs sm:text-sm"
                 >
-                  Save <Send className="w-3.5 h-3.5" />
+                  {isUploading ? (
+                    <>Uploading... <Loader2 className="w-3.5 h-3.5 animate-spin" /></>
+                  ) : (
+                    <>Save <Send className="w-3.5 h-3.5" /></>
+                  )}
                 </button>
               </div>
             </form>
           </div>
 
-          {/* Timeline of Updates */}
           <div>
             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5" /> History
             </h4>
             
-            {isLoadingTimeline ? (
+            {isLoadingUpdates ? (
               <div className="flex flex-col items-center justify-center py-6 text-slate-400 gap-2">
                 <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
                 <span className="text-xs font-medium">Loading timeline...</span>
               </div>
-            ) : timelineUpdates.length === 0 ? (
+            ) : sortedUpdates.length === 0 ? (
               <p className="text-slate-500 italic text-xs text-center py-3">No updates yet.</p>
             ) : (
               <div className="relative border-l-2 border-slate-300 ml-2 md:ml-3 space-y-4 sm:space-y-6 pb-2">
-                {timelineUpdates.map((update) => (
+                {sortedUpdates.map((update) => (
                   <div key={update.id} className="relative pl-5 sm:pl-8">
                     {/* Timeline Dot */}
                     <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-white border-2 border-indigo-500 shadow-sm z-10 flex items-center justify-center">
@@ -655,7 +910,18 @@ function ProjectAccordion({ project, theme, index, user, authError, localUpdates
                     </div>
                     
                     {/* Update Content Card */}
-                    <div className="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-100">
+                    <LongPressable
+                      onLongPress={(e) => {
+                        setActionMenu({
+                          title: "Update Options",
+                          options: [
+                            { label: "Edit Text", icon: <Edit3 className="w-4 h-4"/>, onClick: () => handleEditUpdate(update) },
+                            { label: "Delete Update", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDeleteUpdate(update) }
+                          ]
+                        });
+                      }}
+                      className="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-100 select-none touch-manipulation transition-colors hover:bg-slate-50 cursor-pointer"
+                    >
                       <div className="flex flex-wrap items-center gap-2 mb-2">
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded flex-shrink-0">
                           <CheckCircle2 className="w-3 h-3" /> Published
@@ -672,20 +938,29 @@ function ProjectAccordion({ project, theme, index, user, authError, localUpdates
                       )}
                       
                       {update.images && update.images.length > 0 && (
-                        <div className="mt-2.5 flex flex-wrap gap-2">
+                        <div className="mt-2.5 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
                           {update.images.map((img, i) => (
-                            <button 
+                            <LongPressable 
+                              as="button"
                               key={i}
+                              onLongPress={(e) => {
+                                setActionMenu({
+                                  title: "Image Options",
+                                  options: [
+                                    { label: "Delete Image", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDeleteImage(update, i) }
+                                  ]
+                                });
+                              }}
                               onClick={() => setExpandedImage(img)}
-                              className="relative group flex items-center justify-center bg-slate-50 border border-slate-200 rounded-md overflow-hidden shadow-sm hover:shadow-md transition-all h-10 w-10 sm:h-12 sm:w-12"
+                              className="relative group flex items-center justify-center bg-slate-50 border border-slate-200 rounded-md overflow-hidden shadow-sm hover:shadow-md transition-all h-10 w-10 sm:h-12 sm:w-12 select-none touch-manipulation"
                             >
-                              <img src={img} alt={`Attachment ${i}`} className="w-full h-full object-cover" />
+                              <img src={img} alt={`Attachment ${i}`} className="w-full h-full object-cover pointer-events-none" />
                               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                            </button>
+                            </LongPressable>
                           ))}
                         </div>
                       )}
-                    </div>
+                    </LongPressable>
                   </div>
                 ))}
               </div>
