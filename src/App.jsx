@@ -3,7 +3,7 @@ import {
   Building2, Map, MapPin, Tent, Trees, Home, 
   X, Plus, ChevronDown, Image as ImageIcon, 
   Send, Calendar, Clock, CheckCircle2, FileText, Loader2, AlertTriangle, HelpCircle,
-  Edit3, Trash2, Paperclip, Download
+  Edit3, Trash2, Paperclip, Download, User, Users
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS (Storage Removed) ---
@@ -66,6 +66,8 @@ const INITIAL_LOCAL_BODIES = [
   { id: 'ponmundam', name: 'Ponmundam', color: 'from-amber-400 to-orange-500', theme: 'amber', icon: Tent },
   { id: 'tanalur', name: 'Tanalur', color: 'from-rose-400 to-pink-600', theme: 'rose', icon: Home },
   { id: 'niramaruthur', name: 'Niramaruthur', color: 'from-teal-400 to-emerald-500', theme: 'teal', icon: MapPin },
+  { id: 'personal', name: 'Personal', color: 'from-violet-500 to-fuchsia-600', theme: 'fuchsia', icon: User },
+  { id: 'common', name: 'Common', color: 'from-slate-500 to-slate-700', theme: 'slate', icon: Users },
 ];
 
 const THEME_MAP = {
@@ -75,6 +77,8 @@ const THEME_MAP = {
   amber: { light: 'bg-amber-50 border-amber-100', dark: 'bg-amber-100/60 border-amber-200', text: 'text-amber-800' },
   rose: { light: 'bg-rose-50 border-rose-100', dark: 'bg-rose-100/60 border-rose-200', text: 'text-rose-800' },
   teal: { light: 'bg-teal-50 border-teal-100', dark: 'bg-teal-100/60 border-teal-200', text: 'text-teal-800' },
+  fuchsia: { light: 'bg-fuchsia-50 border-fuchsia-100', dark: 'bg-fuchsia-100/60 border-fuchsia-200', text: 'text-fuchsia-800' },
+  slate: { light: 'bg-slate-50 border-slate-100', dark: 'bg-slate-100/60 border-slate-200', text: 'text-slate-800' },
 };
 
 const useLongPress = (callback, ms = 600) => {
@@ -312,7 +316,7 @@ export default function App() {
         </div>
       )}
 
-      <main className="flex-1 overflow-hidden px-3 sm:px-6 lg:px-8 py-4 sm:py-6 flex flex-col justify-center items-center">
+      <main className="flex-1 overflow-y-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 flex flex-col items-center">
         {authError && (
           <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-800 text-xs px-4 py-2.5 rounded-xl max-w-7xl w-full flex justify-between items-center">
             <span className="flex items-center gap-2">
@@ -322,7 +326,7 @@ export default function App() {
           </div>
         )}
 
-        <div className="max-w-7xl w-full grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-5">
+        <div className="max-w-7xl w-full grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-5 pb-6">
           {localBodies.map((body) => (
             <div key={body.id} onClick={() => handleOpenBody(body)} className={`relative overflow-hidden rounded-xl cursor-pointer group bg-gradient-to-br ${body.color} p-3 sm:p-5 text-white shadow-md hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col justify-between min-h-[110px] sm:min-h-[140px]`}>
               <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 sm:w-32 sm:h-32 bg-white opacity-10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
@@ -346,7 +350,7 @@ export default function App() {
         </div>
       </main>
 
-      <footer className="shrink-0 pb-2 text-center text-[9px] sm:text-[10px] font-light text-slate-400/50 pointer-events-none select-none">
+      <footer className="shrink-0 pb-2 text-center text-[9px] sm:text-[10px] font-light text-slate-400/50 pointer-events-none select-none bg-slate-50">
         DB: imbrushanartslab@gmail.com &nbsp;|&nbsp; Img: Claudinary_pathinanchamathemail@gmail.com
       </footer>
 
