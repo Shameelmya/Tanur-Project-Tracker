@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
-  Building2, Map, MapPin, Tent, Trees, Home, 
+  Building2, Map as MapIcon, MapPin, Tent, Trees, Home, 
   X, Plus, ChevronDown, Image as ImageIcon, 
   Send, Calendar, Clock, CheckCircle2, FileText, Loader2, AlertTriangle, HelpCircle,
-  Edit3, Trash2, Paperclip, Download, User, Users
+  Edit3, Trash2, Paperclip, Download, User, Users, Folder, Star
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS (Storage Removed) ---
@@ -58,16 +58,21 @@ const uploadToCloudinary = async (fileData) => {
   return data.secure_url; // Returns the permanent Cloudinary URL
 };
 
+const ICON_MAP = {
+  Building2, Map: MapIcon, MapPin, Tent, Trees, Home, User, Users, AlertTriangle, Star, FileText, Folder
+};
 
 const INITIAL_LOCAL_BODIES = [
+  { id: 'priority', name: 'Priority Files', color: 'from-red-500 to-rose-700', theme: 'rose', icon: AlertTriangle },
   { id: 'tanur', name: 'Tanur Municipality', color: 'from-indigo-500 to-purple-600', theme: 'indigo', icon: Building2 },
   { id: 'ozhur', name: 'Ozhur', color: 'from-emerald-400 to-green-600', theme: 'emerald', icon: Trees },
-  { id: 'cheriyamundam', name: 'Cheriyamundam', color: 'from-blue-400 to-cyan-600', theme: 'blue', icon: Map },
+  { id: 'cheriyamundam', name: 'Cheriyamundam', color: 'from-blue-400 to-cyan-600', theme: 'blue', icon: MapIcon },
   { id: 'ponmundam', name: 'Ponmundam', color: 'from-amber-400 to-orange-500', theme: 'amber', icon: Tent },
   { id: 'tanalur', name: 'Tanalur', color: 'from-rose-400 to-pink-600', theme: 'rose', icon: Home },
   { id: 'niramaruthur', name: 'Niramaruthur', color: 'from-teal-400 to-emerald-500', theme: 'teal', icon: MapPin },
   { id: 'personal', name: 'Personal', color: 'from-violet-500 to-fuchsia-600', theme: 'fuchsia', icon: User },
   { id: 'common', name: 'Common', color: 'from-slate-500 to-slate-700', theme: 'slate', icon: Users },
+  { id: 'trivandrum', name: 'Trivandrum Office', color: 'from-cyan-500 to-blue-700', theme: 'blue', icon: Building2 },
 ];
 
 const THEME_MAP = {
@@ -79,6 +84,19 @@ const THEME_MAP = {
   teal: { light: 'bg-teal-50 border-teal-100', dark: 'bg-teal-100/60 border-teal-200', text: 'text-teal-800' },
   fuchsia: { light: 'bg-fuchsia-50 border-fuchsia-100', dark: 'bg-fuchsia-100/60 border-fuchsia-200', text: 'text-fuchsia-800' },
   slate: { light: 'bg-slate-50 border-slate-100', dark: 'bg-slate-100/60 border-slate-200', text: 'text-slate-800' },
+};
+
+const getRandomStyle = () => {
+  const styles = [
+    { color: 'from-indigo-500 to-purple-600', theme: 'indigo' },
+    { color: 'from-emerald-400 to-green-600', theme: 'emerald' },
+    { color: 'from-blue-500 to-cyan-600', theme: 'blue' },
+    { color: 'from-amber-400 to-orange-500', theme: 'amber' },
+    { color: 'from-rose-400 to-pink-600', theme: 'rose' },
+    { color: 'from-teal-400 to-emerald-500', theme: 'teal' },
+    { color: 'from-violet-500 to-fuchsia-600', theme: 'fuchsia' }
+  ];
+  return styles[Math.floor(Math.random() * styles.length)];
 };
 
 const useLongPress = (callback, ms = 600) => {
@@ -116,8 +134,8 @@ const useLongPress = (callback, ms = 600) => {
   };
 };
 
-const LongPressable = ({ onLongPress, onClick, children, className, as: Component = 'div', ...props }) => {
-  const longPressEvent = useLongPress(onLongPress, 500);
+const LongPressable = ({ onLongPress, onClick, delay = 600, children, className, as: Component = 'div', ...props }) => {
+  const longPressEvent = useLongPress(onLongPress, delay);
   return (
     <Component
       {...props}
@@ -144,8 +162,8 @@ const compressImage = (file) => {
       img.src = event.target.result;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1280; // Changed from 1920 for faster upload
-        const MAX_HEIGHT = 1280; // Changed from 1920 for faster upload
+        const MAX_WIDTH = 1280; 
+        const MAX_HEIGHT = 1280; 
         let width = img.width;
         let height = img.height;
 
@@ -159,7 +177,7 @@ const compressImage = (file) => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.80)); // Slightly compressed quality for faster upload
+        resolve(canvas.toDataURL('image/jpeg', 0.80)); 
       };
     };
   });
@@ -173,7 +191,6 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
 });
 
 export default function App() {
-  const [localBodies] = useState(INITIAL_LOCAL_BODIES);
   const [activeBody, setActiveBody] = useState(null);
   
   // Firebase & State Handlers
@@ -184,6 +201,15 @@ export default function App() {
   // Fallback Local Memory State
   const [allProjects, setAllProjects] = useState([]); 
   const [localUpdates, setLocalUpdates] = useState([]); 
+  const [customCategories, setCustomCategories] = useState([]);
+
+  // Modals for new Categories & Actions
+  const [isAddingCategoryModalOpen, setIsAddingCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  
+  const [homeActionMenu, setHomeActionMenu] = useState(null); 
+  const [homePromptDialog, setHomePromptDialog] = useState(null);
+  const [typeToDeleteDialog, setTypeToDeleteDialog] = useState(null);
 
   useEffect(() => {
     const link = document.createElement('link');
@@ -217,11 +243,8 @@ export default function App() {
     initAuth();
 
     const unsubscribeAuth = onAuthStateChanged(auth, (usr) => {
-      if (usr) {
-        setUser(usr);
-      } else {
-        setUser(null);
-      }
+      if (usr) setUser(usr);
+      else setUser(null);
     });
     return () => unsubscribeAuth();
   }, []);
@@ -229,20 +252,28 @@ export default function App() {
   useEffect(() => {
     if (!user || authError) return;
 
+    // Fetch Projects
     const projectsRef = collection(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects');
-    
     const unsubscribeProjects = onSnapshot(projectsRef, (snapshot) => {
       const projectsData = [];
-      snapshot.forEach(doc => {
-        projectsData.push({ id: doc.id, ...doc.data() });
-      });
+      snapshot.forEach(doc => projectsData.push({ id: doc.id, ...doc.data() }));
       projectsData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       setAllProjects(projectsData);
-    }, (error) => {
-      console.error("Error fetching projects:", error);
-    });
+    }, (error) => console.error("Error fetching projects:", error));
 
-    return () => unsubscribeProjects();
+    // Fetch Custom Categories
+    const categoriesRef = collection(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'categories');
+    const unsubscribeCategories = onSnapshot(categoriesRef, (snapshot) => {
+      const cats = [];
+      snapshot.forEach(doc => cats.push({ id: doc.id, ...doc.data() }));
+      cats.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      setCustomCategories(cats);
+    }, (error) => console.error("Error fetching categories:", error));
+
+    return () => {
+      unsubscribeProjects();
+      unsubscribeCategories();
+    };
   }, [user, authError]);
 
   const handleOpenBody = (body) => setActiveBody(body);
@@ -263,22 +294,135 @@ export default function App() {
     if (user && !authError) {
       try {
         const firebaseTask = setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', projectId), projectData);
-        const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 8000));
-        await Promise.race([firebaseTask, timeout]);
+        await Promise.race([firebaseTask, new Promise((_, r) => setTimeout(() => r(new Error("Timeout")), 8000))]);
       } catch (err) {
         console.warn("Failed to sync project to cloud, but saved locally:", err);
       }
     }
   };
 
+  const handleCreateCategory = async (e) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) return;
+
+    const style = getRandomStyle();
+    const newCat = {
+      id: `cat_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      name: newCategoryName.trim(),
+      color: style.color,
+      theme: style.theme,
+      iconName: 'Folder', // Default icon for custom categories
+      createdAt: new Date().toISOString(),
+      deleted: false
+    };
+
+    setCustomCategories(prev => [...prev, newCat]);
+    setIsAddingCategoryModalOpen(false);
+    setNewCategoryName('');
+
+    if (user && !authError) {
+      try {
+        await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'categories', newCat.id), newCat);
+      } catch(err) {
+        console.warn("Failed to sync category to cloud, saved locally.", err);
+      }
+    }
+  };
+
+  // Action Menu Handlers for Boxes
+  const handleBoxLongPress = (body) => {
+    setHomeActionMenu({
+       title: "Box Options",
+       options: [
+         { label: "Rename Box", icon: <Edit3 className="w-4 h-4"/>, onClick: () => handleRenameBox(body) },
+         { label: "Delete Box", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDeleteBoxRequest(body) }
+       ]
+    });
+  };
+
+  const handleRenameBox = (body) => {
+    setHomePromptDialog({
+       title: "Rename Box",
+       defaultValue: body.name,
+       onConfirm: async (newName) => {
+          const categoryDataToSave = {
+              id: body.id,
+              name: newName,
+              color: body.color,
+              theme: body.theme,
+              iconName: body.iconName || Object.keys(ICON_MAP).find(k => ICON_MAP[k] === body.icon) || 'Folder',
+              deleted: false
+          };
+          if (user && !authError) {
+             try { await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'categories', body.id), categoryDataToSave, { merge: true }); }
+             catch (err) { console.error("Rename failed", err); }
+          } else {
+             // Local Fallback
+             setCustomCategories(prev => {
+                const existingIdx = prev.findIndex(c => c.id === body.id);
+                if(existingIdx >= 0) {
+                   const newCats = [...prev];
+                   newCats[existingIdx] = { ...newCats[existingIdx], name: newName };
+                   return newCats;
+                }
+                return [...prev, categoryDataToSave];
+             });
+          }
+       }
+    });
+  };
+
+  const handleDeleteBoxRequest = (body) => {
+    setTypeToDeleteDialog({
+       title: "Delete Box",
+       message: `To confirm deletion of "${body.name}", please type "delete" below.`,
+       onConfirm: async () => {
+          if (user && !authError) {
+             try { await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'categories', body.id), { deleted: true }, { merge: true }); }
+             catch (err) { console.error("Delete failed", err); }
+          } else {
+             // Local Fallback
+             setCustomCategories(prev => {
+                const existingIdx = prev.findIndex(c => c.id === body.id);
+                if(existingIdx >= 0) {
+                   const newCats = [...prev];
+                   newCats[existingIdx] = { ...newCats[existingIdx], deleted: true };
+                   return newCats;
+                }
+                return [...prev, { id: body.id, deleted: true }];
+             });
+          }
+       }
+    });
+  };
+
   const getProjectCount = (bodyId) => allProjects.filter(p => p.localBodyId === bodyId).length;
+
+  // Combine static initial bodies with dynamically created/modified ones from Firestore
+  const displayBodiesMap = new Map();
+  INITIAL_LOCAL_BODIES.forEach(b => displayBodiesMap.set(b.id, b));
+  
+  customCategories.forEach(cat => {
+    if (cat.deleted) {
+       displayBodiesMap.delete(cat.id);
+    } else {
+       const existing = displayBodiesMap.get(cat.id);
+       displayBodiesMap.set(cat.id, { 
+           ...(existing || {}), 
+           ...cat, 
+           icon: ICON_MAP[cat.iconName] || existing?.icon || Folder 
+       });
+    }
+  });
+  
+  const displayBodies = Array.from(displayBodiesMap.values());
 
   return (
     <div className="h-screen bg-slate-50 text-slate-800 flex flex-col overflow-hidden" style={{ fontFamily: "'Sora', 'Noto Serif Malayalam', sans-serif" }}>
       <header className="bg-white shadow-sm shrink-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
           <h1 className="text-lg sm:text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2 sm:gap-3">
-            <Map className="w-5 h-5 sm:w-7 sm:h-7 text-indigo-600" />
+            <MapIcon className="w-5 h-5 sm:w-7 sm:h-7 text-indigo-600" />
             Tanur Projects Tracker
           </h1>
           
@@ -297,6 +441,7 @@ export default function App() {
         </div>
       </header>
 
+      {/* Auth Setup Guide Overlay */}
       {showSetupGuide && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative animate-in zoom-in-95">
@@ -316,6 +461,100 @@ export default function App() {
         </div>
       )}
 
+      {/* Add Category Modal */}
+      {isAddingCategoryModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <button onClick={() => setIsAddingCategoryModalOpen(false)} className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2"><Folder className="w-5 h-5 text-indigo-600"/> Add New Box</h3>
+            <form onSubmit={handleCreateCategory}>
+              <input
+                type="text"
+                autoFocus
+                placeholder="e.g., Ernakulam Office, Meetings..."
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4 text-sm sm:text-base font-medium"
+              />
+              <button
+                type="submit"
+                disabled={!newCategoryName.trim()}
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-colors shadow-sm active:scale-[0.98]"
+              >
+                Create Box
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Home Action Menu (Rename/Delete Box) */}
+      {homeActionMenu && (
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in" onClick={() => setHomeActionMenu(null)}>
+          <div className="bg-white w-full sm:max-w-sm rounded-2xl p-2 shadow-2xl animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95" onClick={e => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-slate-800 text-sm">{homeActionMenu.title}</h3>
+              <button onClick={() => setHomeActionMenu(null)} className="p-1 rounded-full hover:bg-slate-100 text-slate-500"><X className="w-4 h-4"/></button>
+            </div>
+            <div className="p-2 flex flex-col gap-1">
+              {homeActionMenu.options.map((opt, i) => (
+                <button key={i} onClick={() => { setHomeActionMenu(null); opt.onClick(); }} className={`flex items-center gap-3 w-full text-left px-4 py-3 rounded-xl text-sm font-medium ${opt.danger ? 'text-red-600 hover:bg-red-50' : 'text-slate-700 hover:bg-slate-100'}`}>
+                  {opt.icon} {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Home Prompt Dialog (Rename Box) */}
+      {homePromptDialog && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => setHomePromptDialog(null)}>
+          <div className="bg-white max-w-md w-full rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-slate-900 mb-4">{homePromptDialog.title}</h3>
+            <input autoFocus type="text" className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none mb-4" defaultValue={homePromptDialog.defaultValue} id="homePromptInput"/>
+            <div className="flex gap-3 justify-end mt-4">
+              <button onClick={() => setHomePromptDialog(null)} className="px-4 py-2 rounded-lg font-semibold text-slate-600 hover:bg-slate-100 text-sm">Cancel</button>
+              <button onClick={() => { const val = document.getElementById('homePromptInput').value; if(val.trim()) { homePromptDialog.onConfirm(val.trim()); setHomePromptDialog(null); } }} className="px-4 py-2 rounded-lg font-semibold bg-indigo-600 hover:bg-indigo-700 text-white text-sm">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Type to Delete Dialog */}
+      {typeToDeleteDialog && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => setTypeToDeleteDialog(null)}>
+          <div className="bg-white max-w-sm w-full rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="text-red-500 mb-4"><AlertTriangle className="w-10 h-10" /></div>
+            <h3 className="text-lg font-bold text-slate-900 mb-2">{typeToDeleteDialog.title}</h3>
+            <p className="text-sm text-slate-600 mb-4">{typeToDeleteDialog.message}</p>
+            <input 
+              autoFocus
+              type="text"
+              placeholder="Type 'delete' here..."
+              onChange={(e) => {
+                const btn = document.getElementById('confirmTypeDeleteBtn');
+                if (btn) btn.disabled = e.target.value.toLowerCase() !== 'delete';
+              }}
+              className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none mb-6"
+            />
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setTypeToDeleteDialog(null)} className="px-4 py-2 rounded-lg font-semibold text-slate-600 hover:bg-slate-100 text-sm">Cancel</button>
+              <button 
+                id="confirmTypeDeleteBtn"
+                disabled
+                onClick={() => { typeToDeleteDialog.onConfirm(); setTypeToDeleteDialog(null); }} 
+                className="px-4 py-2 rounded-lg font-semibold bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm transition-colors shadow-sm"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="flex-1 overflow-y-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 flex flex-col items-center">
         {authError && (
           <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-800 text-xs px-4 py-2.5 rounded-xl max-w-7xl w-full flex justify-between items-center">
@@ -326,32 +565,51 @@ export default function App() {
           </div>
         )}
 
-        <div className="max-w-7xl w-full grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-5 pb-6">
-          {localBodies.map((body) => (
-            <div key={body.id} onClick={() => handleOpenBody(body)} className={`relative overflow-hidden rounded-xl cursor-pointer group bg-gradient-to-br ${body.color} p-3 sm:p-5 text-white shadow-md hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col justify-between min-h-[110px] sm:min-h-[140px]`}>
-              <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 sm:w-32 sm:h-32 bg-white opacity-10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
-              <div className="relative z-10 flex flex-col h-full justify-between">
-                <div className="flex justify-between items-start">
-                  <div className="p-2 sm:p-3 bg-white/20 rounded-lg sm:rounded-xl backdrop-blur-sm">
-                    <body.icon className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
+        <div className="max-w-7xl w-full grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5 pb-6">
+          {displayBodies.map((body) => {
+            const IconComponent = body.icon;
+            return (
+              <LongPressable 
+                as="div"
+                key={body.id} 
+                delay={4000}
+                onLongPress={() => handleBoxLongPress(body)}
+                onClick={() => handleOpenBody(body)} 
+                className={`relative overflow-hidden rounded-xl cursor-pointer group bg-gradient-to-br ${body.color} p-3 sm:p-5 text-white shadow-md hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col justify-between min-h-[110px] sm:min-h-[140px]`}
+              >
+                <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 sm:w-32 sm:h-32 bg-white opacity-10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+                <div className="relative z-10 flex flex-col h-full justify-between">
+                  <div className="flex justify-between items-start">
+                    <div className="p-2 sm:p-3 bg-white/20 rounded-lg sm:rounded-xl backdrop-blur-sm">
+                      <IconComponent className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
+                    </div>
+                    <div className="text-right">
+                      <span className="inline-flex items-center justify-center px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-white/20 backdrop-blur-sm text-[10px] sm:text-xs font-semibold">
+                        {getProjectCount(body.id)} Projects
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="inline-flex items-center justify-center px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-white/20 backdrop-blur-sm text-[10px] sm:text-xs font-semibold">
-                      {getProjectCount(body.id)} Projects
-                    </span>
+                  <div className="mt-3 sm:mt-5">
+                    <h2 className="text-sm sm:text-lg lg:text-xl font-bold leading-tight line-clamp-2">{body.name}</h2>
                   </div>
                 </div>
-                <div className="mt-3 sm:mt-5">
-                  <h2 className="text-sm sm:text-lg lg:text-xl font-bold leading-tight line-clamp-2">{body.name}</h2>
-                </div>
-              </div>
-            </div>
-          ))}
+              </LongPressable>
+            );
+          })}
         </div>
+
+        {/* Minimal Add Box Button */}
+        <button 
+          onClick={() => setIsAddingCategoryModalOpen(true)} 
+          className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-full shadow-sm hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 hover:shadow-md transition-all text-xs sm:text-sm font-semibold mb-6 group"
+        >
+          <Plus className="w-4 h-4 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" /> Add New Box
+        </button>
+
       </main>
 
       <footer className="shrink-0 pb-2 text-center text-[9px] sm:text-[10px] font-light text-slate-400/50 pointer-events-none select-none bg-slate-50">
-        Firebase: imbrushanartslab@gmail.com &nbsp;|&nbsp; Img: Claudinary_pathinanchamathemail@gmail.com
+        DB: imbrushanartslab@gmail.com &nbsp;|&nbsp; Img: Claudinary_pathinanchamathemail@gmail.com
       </footer>
 
       {activeBody && (
@@ -419,6 +677,8 @@ function ProjectModal({ body, onClose, projects, onAddProject, user, authError, 
     setIsAddingProject(false);
   };
 
+  const IconComponent = body.icon || Folder;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-6 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
@@ -426,7 +686,7 @@ function ProjectModal({ body, onClose, projects, onAddProject, user, authError, 
         <div className={`p-4 sm:p-6 bg-gradient-to-r ${body.color} text-white flex justify-between items-center shrink-0`}>
           <div>
             <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2 sm:gap-3">
-              <body.icon className="w-6 h-6 sm:w-7 sm:h-7 opacity-80" />
+              <IconComponent className="w-6 h-6 sm:w-7 sm:h-7 opacity-80" />
               {body.name}
             </h2>
             <p className="mt-1 text-white/80 font-medium text-xs sm:text-sm">Manage and track local development projects.</p>
