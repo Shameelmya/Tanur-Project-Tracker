@@ -3,7 +3,7 @@ import {
   Building2, Map as MapIcon, MapPin, Tent, Trees, Home, 
   X, Plus, ChevronDown, Image as ImageIcon, 
   Send, Calendar, Clock, CheckCircle2, FileText, Loader2, AlertTriangle, HelpCircle,
-  Edit3, Trash2, Paperclip, Download, User, Users, Folder, Star
+  Edit3, Trash2, Paperclip, Download, User, Users, Folder, Star, Zap, CheckSquare
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS (Storage Removed) ---
@@ -205,6 +205,7 @@ export default function App() {
 
   // Modals for new Categories & Actions
   const [isAddingCategoryModalOpen, setIsAddingCategoryModalOpen] = useState(false);
+  const [isQuickAddModalOpen, setIsQuickAddModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   
   const [homeActionMenu, setHomeActionMenu] = useState(null); 
@@ -279,11 +280,12 @@ export default function App() {
   const handleOpenBody = (body) => setActiveBody(body);
   const handleCloseBody = () => setActiveBody(null);
 
-  const handleAddProject = async (bodyId, projectName) => {
+  // Updated to accept multiple body IDs for Quick Add
+  const handleAddProject = async (bodyIds, projectName) => {
     const projectId = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const projectData = {
       id: projectId,
-      localBodyId: bodyId,
+      localBodyIds: Array.isArray(bodyIds) ? bodyIds : [bodyIds],
       name: projectName,
       createdAt: new Date().toISOString(),
       updateCount: 0
@@ -396,7 +398,9 @@ export default function App() {
     });
   };
 
-  const getProjectCount = (bodyId) => allProjects.filter(p => p.localBodyId === bodyId).length;
+  const getProjectCount = (bodyId) => {
+    return allProjects.filter(p => p.localBodyId === bodyId || (p.localBodyIds && p.localBodyIds.includes(bodyId))).length;
+  };
 
   // Combine static initial bodies with dynamically created/modified ones from Firestore
   const displayBodiesMap = new Map();
@@ -459,6 +463,15 @@ export default function App() {
             <button onClick={() => setShowSetupGuide(false)} className="mt-6 w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm">Got it!</button>
           </div>
         </div>
+      )}
+
+      {/* Quick Add Project Modal */}
+      {isQuickAddModalOpen && (
+        <QuickAddModal 
+          onClose={() => setIsQuickAddModalOpen(false)}
+          onSave={handleAddProject}
+          bodies={displayBodies}
+        />
       )}
 
       {/* Add Category Modal */}
@@ -608,6 +621,16 @@ export default function App() {
 
       </main>
 
+      {/* Floating Quick Add Button */}
+      <button
+        onClick={() => setIsQuickAddModalOpen(true)}
+        className="fixed bottom-6 right-6 z-40 bg-indigo-600 text-white p-4 sm:px-6 sm:py-4 rounded-full shadow-xl hover:bg-indigo-700 hover:scale-105 transition-all group flex items-center justify-center gap-2"
+        title="Quick Add Project"
+      >
+        <Zap className="w-6 h-6 group-hover:animate-pulse" />
+        <span className="font-bold text-sm hidden sm:block pr-1">Quick Add</span>
+      </button>
+
       <footer className="shrink-0 pb-2 text-center text-[9px] sm:text-[10px] font-light text-slate-400/50 pointer-events-none select-none bg-slate-50">
         DB: imbrushanartslab@gmail.com &nbsp;|&nbsp; Img: Claudinary_pathinanchamathemail@gmail.com
       </footer>
@@ -616,8 +639,8 @@ export default function App() {
         <ProjectModal 
           body={activeBody} 
           onClose={handleCloseBody}
-          projects={allProjects.filter(p => p.localBodyId === activeBody.id)}
-          onAddProject={(name) => handleAddProject(activeBody.id, name)}
+          projects={allProjects.filter(p => p.localBodyId === activeBody.id || (p.localBodyIds && p.localBodyIds.includes(activeBody.id)))}
+          onAddProject={(name) => handleAddProject([activeBody.id], name)}
           user={user}
           authError={authError}
           localUpdates={localUpdates}
@@ -625,6 +648,82 @@ export default function App() {
           setAllProjects={setAllProjects}
         />
       )}
+    </div>
+  );
+}
+
+function QuickAddModal({ onClose, onSave, bodies }) {
+  const [projectName, setProjectName] = useState('');
+  const [selectedIds, setSelectedIds] = useState([]);
+
+  const toggleBox = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.length === bodies.length) setSelectedIds([]);
+    else setSelectedIds(bodies.map(b => b.id));
+  };
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    if (!projectName.trim() || selectedIds.length === 0) return;
+    onSave(selectedIds, projectName.trim());
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl relative flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+        <button onClick={onClose} className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 transition-colors">
+          <X className="w-5 h-5" />
+        </button>
+        <h3 className="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2"><Zap className="w-5 h-5 text-indigo-600"/> Quick Add Project</h3>
+        <p className="text-xs text-slate-500 mb-4">Create a master project that syncs across multiple boxes.</p>
+        
+        <form onSubmit={handleSave} className="flex flex-col flex-1 overflow-hidden">
+          <input
+            type="text"
+            autoFocus
+            placeholder="Enter project name..."
+            value={projectName}
+            onChange={(e) => setProjectName(e.target.value)}
+            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4 text-sm font-medium shrink-0"
+          />
+
+          <div className="flex items-center justify-between mb-2 shrink-0">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Select Boxes:</span>
+            <button type="button" onClick={handleSelectAll} className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+              {selectedIds.length === bodies.length ? 'Deselect All' : 'Select All'}
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto border border-slate-200 rounded-xl p-2 space-y-1 mb-4 bg-slate-50">
+            {bodies.map(body => {
+               const IconComponent = body.icon || Folder;
+               return (
+                 <div key={body.id} onClick={() => toggleBox(body.id)} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 cursor-pointer transition-colors">
+                   <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${selectedIds.includes(body.id) ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`}>
+                     {selectedIds.includes(body.id) && <CheckSquare className="w-4 h-4 text-white" />}
+                   </div>
+                   <div className="flex items-center gap-2 flex-1">
+                     <IconComponent className="w-4 h-4 text-slate-500" />
+                     <span className="text-sm font-semibold text-slate-700">{body.name}</span>
+                   </div>
+                 </div>
+               );
+            })}
+          </div>
+
+          <button
+            type="submit"
+            disabled={!projectName.trim() || selectedIds.length === 0}
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-colors shadow-sm active:scale-[0.98] shrink-0"
+          >
+            Create in {selectedIds.length} {selectedIds.length === 1 ? 'Box' : 'Boxes'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
@@ -995,7 +1094,7 @@ function ProjectAccordion({ project, theme, index, user, authError, allUpdates, 
   const handleDeleteProject = () => {
     setConfirmDialog({
       title: "Delete Project",
-      message: "Are you sure you want to delete this project? This will permanently hide it.",
+      message: "Note: If this project is shared across multiple boxes, it will be deleted from all of them. Are you sure?",
       onConfirm: async () => {
         setAllProjects(prev => prev.filter(p => p.id !== project.id));
         if (user && !authError) {
