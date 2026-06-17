@@ -110,20 +110,59 @@ const getRandomStyle = () => {
   return styles[Math.floor(Math.random() * styles.length)];
 };
 
-const useLongPress = (callback, ms = 4000) => {
+// --- UPDATED LONG PRESS HOOK WITH SCROLL CANCELLATION ---
+const useLongPress = (callback, ms = 2500) => {
   const timerRef = useRef();
   const isLongPress = useRef(false);
+  const startPos = useRef({ x: 0, y: 0 });
 
   const start = useCallback((e) => {
     isLongPress.current = false;
+    
+    // Track where the press started
+    if (e.touches && e.touches.length > 0) {
+      startPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else if (e.clientX !== undefined) {
+      startPos.current = { x: e.clientX, y: e.clientY };
+    }
+
     timerRef.current = setTimeout(() => {
       isLongPress.current = true;
       callback(e);
     }, ms);
   }, [callback, ms]);
 
+  const move = useCallback((e) => {
+    if (timerRef.current) {
+      let currentPos = { x: 0, y: 0 };
+      
+      // Calculate current position during movement
+      if (e.touches && e.touches.length > 0) {
+        currentPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else if (e.clientX !== undefined) {
+        currentPos = { x: e.clientX, y: e.clientY };
+      } else {
+        return; // Exit if we can't get coordinates
+      }
+      
+      // Calculate distance moved from original touch point
+      const dx = currentPos.x - startPos.current.x;
+      const dy = currentPos.y - startPos.current.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // If user moved finger more than 15px (e.g. they are scrolling), cancel the long press
+      if (distance > 15) {
+         clearTimeout(timerRef.current);
+         timerRef.current = null;
+      }
+    }
+  }, []);
+
   const stop = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
   }, []);
 
   const onClickHandler = useCallback((e, defaultClick) => {
@@ -136,19 +175,19 @@ const useLongPress = (callback, ms = 4000) => {
   }, []);
 
   return {
-    onMouseDown: start, onMouseUp: stop, onMouseLeave: stop,
-    onTouchStart: start, onTouchEnd: stop,
+    onMouseDown: start, onMouseUp: stop, onMouseLeave: stop, onMouseMove: move,
+    onTouchStart: start, onTouchEnd: stop, onTouchMove: move,
     onClickHandler
   };
 };
 
-const LongPressable = ({ onLongPress, onClick, delay = 4000, children, className, as: Component = 'div', ...props }) => {
+const LongPressable = ({ onLongPress, onClick, delay = 2500, children, className, as: Component = 'div', ...props }) => {
   const longPressEvent = useLongPress(onLongPress, delay);
   return (
     <Component
       {...props}
-      onMouseDown={longPressEvent.onMouseDown} onMouseUp={longPressEvent.onMouseUp} onMouseLeave={longPressEvent.onMouseLeave}
-      onTouchStart={longPressEvent.onTouchStart} onTouchEnd={longPressEvent.onTouchEnd}
+      onMouseDown={longPressEvent.onMouseDown} onMouseUp={longPressEvent.onMouseUp} onMouseLeave={longPressEvent.onMouseLeave} onMouseMove={longPressEvent.onMouseMove}
+      onTouchStart={longPressEvent.onTouchStart} onTouchEnd={longPressEvent.onTouchEnd} onTouchMove={longPressEvent.onTouchMove}
       onClick={(e) => longPressEvent.onClickHandler(e, onClick)}
       className={className}
     >
@@ -392,7 +431,7 @@ export default function App() {
     
     return (
       <LongPressable 
-        as="div" key={item.id} delay={4000}
+        as="div" key={item.id} delay={2500}
         onLongPress={() => {
           const options = [
             { label: "Rename", icon: <Edit3 className="w-4 h-4"/>, onClick: () => handleRename(item, isMainFolder ? 'main_folders' : 'categories', isMainFolder ? setCustomMainFolders : setCustomCategories) },
@@ -881,7 +920,7 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allUpdat
   return (
     <div className={`rounded-xl border shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md ${cardColorClass}`}>
       <LongPressable 
-        as="button" onLongPress={handleProjectActions} onClick={toggleAccordion} delay={4000}
+        as="button" onLongPress={handleProjectActions} onClick={toggleAccordion} delay={2500}
         className="w-full px-4 sm:px-5 py-3 sm:py-4 flex items-center justify-between bg-transparent hover:bg-black/5 transition-colors text-left"
       >
         <div className="flex items-center gap-3">
@@ -939,7 +978,7 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allUpdat
                      </form>
                   </div>
                 ) : (
-                  <LongPressable delay={4000} onLongPress={() => setActionMenu({ title: "Update Options", options: [{ label: "Edit", icon: <Edit3 className="w-4 h-4"/>, onClick: () => startEditing(update) }, { label: "Delete", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDeleteUpdate(update) }]})} className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 hover:bg-slate-50 cursor-pointer">
+                  <LongPressable delay={2500} onLongPress={() => setActionMenu({ title: "Update Options", options: [{ label: "Edit", icon: <Edit3 className="w-4 h-4"/>, onClick: () => startEditing(update) }, { label: "Delete", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDeleteUpdate(update) }]})} className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 hover:bg-slate-50 cursor-pointer">
                     <div className="flex gap-2 mb-1"><span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">Published</span><span className="text-[10px] text-slate-400">{formatDate(update.timestamp)}</span></div>
                     {update.text && <div className="text-sm text-slate-700 whitespace-pre-wrap">{update.text}</div>}
                     <div className="mt-2 flex gap-2">
