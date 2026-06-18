@@ -225,6 +225,56 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
   reader.onerror = error => reject(error);
 });
 
+// --- HELPER COMPONENTS FOR DIALOGS ---
+function PromptDialog({ dialog, onClose }) {
+  const [val, setVal] = useState(dialog.defaultValue || '');
+  return (
+    <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={onClose}>
+      <div className="bg-white max-w-md w-full rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-bold text-slate-900 mb-4">{dialog.title}</h3>
+        <input 
+          autoFocus type="text" 
+          className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none mb-4" 
+          value={val} onChange={(e) => setVal(e.target.value)} 
+        />
+        <div className="flex gap-3 justify-end mt-4">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg font-semibold text-slate-600 hover:bg-slate-100 text-sm">Cancel</button>
+          <button onClick={() => { if(val.trim()) { dialog.onConfirm(val.trim()); onClose(); } }} className="px-4 py-2 rounded-lg font-semibold bg-indigo-600 hover:bg-indigo-700 text-white text-sm">Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TypeToDeleteDialog({ dialog, onClose }) {
+  const [text, setText] = useState('');
+  return (
+    <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={onClose}>
+      <div className="bg-white max-w-sm w-full rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="text-red-500 mb-4"><AlertTriangle className="w-10 h-10" /></div>
+        <h3 className="text-lg font-bold text-slate-900 mb-2">{dialog.title}</h3>
+        <p className="text-sm text-slate-600 mb-4">{dialog.message}</p>
+        <input
+          autoFocus type="text" placeholder="Type 'delete' here..."
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none mb-6"
+        />
+        <div className="flex gap-3 justify-end">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg font-semibold text-slate-600 hover:bg-slate-100 text-sm">Cancel</button>
+          <button 
+            disabled={text.toLowerCase() !== 'delete'} 
+            onClick={() => { dialog.onConfirm(); onClose(); }} 
+            className="px-4 py-2 rounded-lg font-semibold bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm shadow-sm transition-colors"
+          >
+            Confirm Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // Navigation State
   const [activeMainFolder, setActiveMainFolder] = useState(null);
@@ -309,8 +359,6 @@ export default function App() {
   const displayMainFolders = Array.from(displayMainFoldersMap.values()).map(mf => ({ ...mf, icon: mf.icon || ICON_MAP[mf.iconName] || FolderTree }));
 
   // --- CRITICAL FIX FOR BACKWARD COMPATIBILITY ---
-  // If an older custom subfolder doesn't have a mainFolderId, default it to 'mf_local_bodies' 
-  // so that the data inside it doesn't get orphaned and invisible.
   const displayBodiesMap = new Map();
   INITIAL_SUB_FOLDERS.forEach(b => displayBodiesMap.set(b.id, b));
   customCategories.forEach(cat => {
@@ -611,38 +659,9 @@ export default function App() {
         </div>
       )}
 
-      {/* Prompt & Delete Dialogs */}
-      {promptDialog && (
-        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => setPromptDialog(null)}>
-          <div className="bg-white max-w-md w-full rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-slate-900 mb-4">{promptDialog.title}</h3>
-            <input autoFocus type="text" className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none mb-4" defaultValue={promptDialog.defaultValue} id="globalPromptInput"/>
-            <div className="flex gap-3 justify-end mt-4">
-              <button onClick={() => setPromptDialog(null)} className="px-4 py-2 rounded-lg font-semibold text-slate-600 hover:bg-slate-100 text-sm">Cancel</button>
-              <button onClick={() => { const val = document.getElementById('globalPromptInput').value; if(val.trim()) { promptDialog.onConfirm(val.trim()); setPromptDialog(null); } }} className="px-4 py-2 rounded-lg font-semibold bg-indigo-600 hover:bg-indigo-700 text-white text-sm">Save</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {typeToDeleteDialog && (
-        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => setTypeToDeleteDialog(null)}>
-          <div className="bg-white max-w-sm w-full rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="text-red-500 mb-4"><AlertTriangle className="w-10 h-10" /></div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">{typeToDeleteDialog.title}</h3>
-            <p className="text-sm text-slate-600 mb-4">{typeToDeleteDialog.message}</p>
-            <input 
-              autoFocus type="text" placeholder="Type 'delete' here..."
-              onChange={(e) => { const btn = document.getElementById('confirmTypeDeleteBtn'); if (btn) btn.disabled = e.target.value.toLowerCase() !== 'delete'; }}
-              className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none mb-6"
-            />
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setTypeToDeleteDialog(null)} className="px-4 py-2 rounded-lg font-semibold text-slate-600 hover:bg-slate-100 text-sm">Cancel</button>
-              <button id="confirmTypeDeleteBtn" disabled onClick={() => { typeToDeleteDialog.onConfirm(); setTypeToDeleteDialog(null); }} className="px-4 py-2 rounded-lg font-semibold bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm shadow-sm">Confirm Delete</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Updated robust Dialogs */}
+      {promptDialog && <PromptDialog dialog={promptDialog} onClose={() => setPromptDialog(null)} />}
+      {typeToDeleteDialog && <TypeToDeleteDialog dialog={typeToDeleteDialog} onClose={() => setTypeToDeleteDialog(null)} />}
 
       {/* Project Modal (When Sub-folder is opened) */}
       {activeSubFolder && (
