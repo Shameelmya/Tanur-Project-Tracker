@@ -4,13 +4,13 @@ import {
   X, Plus, ChevronDown, Image as ImageIcon, 
   Send, Calendar, Clock, CheckCircle2, FileText, Loader2, AlertTriangle, HelpCircle,
   Edit3, Trash2, Paperclip, User, Users, Folder, Star, Zap, CheckSquare,
-  ArrowLeft, MoveRight, Briefcase, FolderTree
+  ArrowLeft, MoveRight, Briefcase, FolderTree, Settings, Download, Upload, Copy
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from "firebase/app";
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "firebase/auth";
-import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc } from "firebase/firestore";
+import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, getDocs } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAxL8ejtFBr7m7OJ8gYgd1NpyluwGpiZgA",
@@ -301,6 +301,88 @@ export default function App() {
   const [typeToDeleteDialog, setTypeToDeleteDialog] = useState(null);
   const [moveToDialog, setMoveToDialog] = useState(null);
 
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const [linkProjectData, setLinkProjectData] = useState(null);
+
+  const handleExportJSON = async () => {
+    try {
+      let updates = [];
+      if (user && !authError) {
+        const updatesSnap = await getDocs(collection(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates'));
+        updatesSnap.forEach(document => updates.push({ id: document.id, ...document.data() }));
+      } else {
+        updates = localUpdates;
+      }
+      
+      const exportData = {
+        main_folders: customMainFolders,
+        categories: customCategories,
+        projects: allProjects,
+        project_updates: updates
+      };
+
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href", dataStr);
+      downloadAnchorNode.setAttribute("download", "tanur_tracker_backup.json");
+      document.body.appendChild(downloadAnchorNode);
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+      setIsSettingsOpen(false);
+    } catch (e) {
+      console.error("Export failed", e);
+      alert("Failed to export backup.");
+    }
+  };
+
+  const handleImportJSON = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const importedData = JSON.parse(event.target.result);
+        if (user && !authError) {
+          if (importedData.main_folders) {
+            for (const mf of importedData.main_folders) {
+              await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'main_folders', mf.id), mf);
+            }
+          }
+          if (importedData.categories) {
+            for (const cat of importedData.categories) {
+              await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'categories', cat.id), cat);
+            }
+          }
+          if (importedData.projects) {
+            for (const proj of importedData.projects) {
+              await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', proj.id), proj);
+            }
+          }
+          if (importedData.project_updates) {
+            for (const upd of importedData.project_updates) {
+              await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates', upd.id), upd);
+            }
+          }
+          alert("Import successful!");
+        } else {
+          if (importedData.main_folders) setCustomMainFolders(importedData.main_folders);
+          if (importedData.categories) setCustomCategories(importedData.categories);
+          if (importedData.projects) setAllProjects(importedData.projects);
+          if (importedData.project_updates) setLocalUpdates(importedData.project_updates);
+          alert("Local Import successful!");
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Invalid JSON or import failed.");
+      }
+      e.target.value = '';
+      setIsSettingsOpen(false);
+    };
+    reader.readAsText(file);
+  };
+
   useEffect(() => {
     const link = document.createElement('link');
     link.href = 'https://fonts.googleapis.com/css2?family=Noto+Serif+Malayalam:wght@400;600;700&family=Sora:wght@300;400;600;700&display=swap';
@@ -548,9 +630,25 @@ export default function App() {
               )}
             </h1>
           </div>
-          <span className="text-[10px] sm:text-xs font-semibold bg-emerald-50 border border-emerald-100 text-emerald-800 px-2.5 py-1.5 rounded-full hidden md:block">
-            Connected to Cloud DB
-          </span>
+          <div className="flex items-center gap-3 relative">
+            <span className="text-[10px] sm:text-xs font-semibold bg-emerald-50 border border-emerald-100 text-emerald-800 px-2.5 py-1.5 rounded-full hidden md:block">
+              Connected to Cloud DB
+            </span>
+            <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-colors relative">
+              <Settings className="w-5 h-5 sm:w-6 sm:h-6" />
+            </button>
+            {isSettingsOpen && (
+              <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl py-2 z-50 animate-in fade-in zoom-in-95">
+                <button onClick={handleExportJSON} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 text-left">
+                  <Download className="w-4 h-4" /> Export Backup (JSON)
+                </button>
+                <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 text-left">
+                  <Upload className="w-4 h-4" /> Import Backup (JSON)
+                </button>
+                <input type="file" accept=".json" className="hidden" ref={fileInputRef} onChange={handleImportJSON} />
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -588,6 +686,22 @@ export default function App() {
         <QuickAddModal 
           onClose={() => setIsQuickAddModalOpen(false)}
           onSave={handleAddProject}
+          mainFolders={displayMainFolders}
+          allSubFolders={allSubFolders}
+        />
+      )}
+      
+      {linkProjectData && (
+        <LinkProjectModal
+          project={linkProjectData}
+          onClose={() => setLinkProjectData(null)}
+          onSave={async (projectId, newBodyIds) => {
+            setAllProjects(prev => prev.map(p => p.id === projectId ? { ...p, localBodyIds: newBodyIds } : p));
+            if (user && !authError) {
+              try { await updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', projectId), { localBodyIds: newBodyIds }); } catch (e) {}
+            }
+            setLinkProjectData(null);
+          }}
           mainFolders={displayMainFolders}
           allSubFolders={allSubFolders}
         />
@@ -673,6 +787,7 @@ export default function App() {
           user={user} authError={authError} db={db}
           localUpdates={localUpdates} setLocalUpdates={setLocalUpdates} setAllProjects={setAllProjects}
           setActionMenu={setActionMenu} setConfirmDialog={setTypeToDeleteDialog} setPromptDialog={setPromptDialog}
+          setLinkProjectData={setLinkProjectData}
         />
       )}
     </div>
@@ -737,7 +852,7 @@ function QuickAddModal({ onClose, onSave, mainFolders, allSubFolders }) {
 }
 
 // --- PROJECT MODAL & ACCORDION (Preserved full logic) ---
-function ProjectModal({ body, onClose, projects, onAddProject, user, authError, db, localUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog }) {
+function ProjectModal({ body, onClose, projects, onAddProject, user, authError, db, localUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData }) {
   const [isAddingProject, setIsAddingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [allUpdates, setAllUpdates] = useState([]);
@@ -802,6 +917,7 @@ function ProjectModal({ body, onClose, projects, onAddProject, user, authError, 
                   allUpdates={allUpdates.filter(u => u.projectId === project.id)} localUpdates={localUpdates.filter(u => u.projectId === project.id)}
                   isLoadingUpdates={isLoadingUpdates} setLocalUpdates={setLocalUpdates} setAllProjects={setAllProjects}
                   setActionMenu={setActionMenu} setConfirmDialog={setConfirmDialog} setPromptDialog={setPromptDialog}
+                  setLinkProjectData={setLinkProjectData}
                 />
               ))
             )}
@@ -812,7 +928,7 @@ function ProjectModal({ body, onClose, projects, onAddProject, user, authError, 
   );
 }
 
-function ProjectAccordion({ project, theme, index, user, authError, db, allUpdates, localUpdates, isLoadingUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog }) {
+function ProjectAccordion({ project, theme, index, user, authError, db, allUpdates, localUpdates, isLoadingUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData }) {
   const [isOpen, setIsOpen] = useState(false);
   const [updateText, setUpdateText] = useState('');
   const [attachments, setAttachments] = useState([]);
@@ -920,6 +1036,7 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allUpdat
 
   const handleProjectActions = () => {
     setActionMenu({ title: "Project Options", options: [
+      { label: "Make a Copy (Link)", icon: <Copy className="w-4 h-4"/>, onClick: () => setLinkProjectData(project) },
       { label: "Edit Name", icon: <Edit3 className="w-4 h-4"/>, onClick: () => setPromptDialog({ title: "Edit Project Name", defaultValue: project.name, onConfirm: async (n) => {
         setAllProjects(prev => prev.map(p => p.id === project.id ? { ...p, name: n } : p));
         if (user && !authError) { try { await updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', project.id), { name: n }); } catch (e){} }
@@ -1035,6 +1152,63 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allUpdat
           <img src={expandedImage} alt="Expanded" className="max-w-full max-h-[90vh] object-contain rounded-lg" onClick={e => e.stopPropagation()}/>
         </div>
       )}
+    </div>
+  );
+}
+
+// --- LINK PROJECT MODAL ---
+function LinkProjectModal({ project, onClose, onSave, mainFolders, allSubFolders }) {
+  const [selectedIds, setSelectedIds] = useState(project.localBodyIds || []);
+
+  const toggleBox = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    if (selectedIds.length === 0) {
+      alert("Project must be linked to at least one folder.");
+      return;
+    }
+    onSave(project.id, selectedIds);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl relative flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+        <button onClick={onClose} className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button>
+        <h3 className="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2"><Copy className="w-5 h-5 text-indigo-600"/> Link to Folders</h3>
+        <p className="text-xs text-slate-500 mb-4">Select the folders where you want this project to appear. Updates are shared across all linked folders.</p>
+        
+        <form onSubmit={handleSave} className="flex flex-col flex-1 overflow-hidden">
+          <div className="px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-xl mb-4">
+            <span className="text-sm font-bold text-indigo-900">{project.name}</span>
+          </div>
+          <div className="flex-1 overflow-y-auto border border-slate-200 rounded-xl p-3 mb-4 bg-slate-50 space-y-4">
+            {mainFolders.map(mf => {
+              const subs = allSubFolders.filter(sf => sf.mainFolderId === mf.id);
+              if (subs.length === 0) return null;
+              return (
+                <div key={mf.id} className="space-y-1">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5"><mf.icon className="w-3.5 h-3.5"/> {mf.name}</h4>
+                  {subs.map(body => {
+                    const IconComponent = body.icon || Folder;
+                    return (
+                      <div key={body.id} onClick={() => toggleBox(body.id)} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 cursor-pointer transition-colors">
+                        <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${selectedIds.includes(body.id) ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`}>
+                          {selectedIds.includes(body.id) && <CheckSquare className="w-4 h-4 text-white" />}
+                        </div>
+                        <div className="flex items-center gap-2 flex-1"><IconComponent className="w-4 h-4 text-slate-500" /><span className="text-sm font-semibold text-slate-700">{body.name}</span></div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+          <button type="submit" disabled={selectedIds.length === 0} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition-colors shadow-sm shrink-0">
+            Save Links ({selectedIds.length} location{selectedIds.length !== 1 ? 's' : ''})
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
