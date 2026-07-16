@@ -181,7 +181,7 @@ const useLongPress = (callback, ms = 2500) => {
   };
 };
 
-const LongPressable = ({ onLongPress, onClick, delay = 2500, children, className, as: Component = 'div', ...props }) => {
+const LongPressable = ({ onLongPress, onClick, delay = 2000, children, className, as: Component = 'div', ...props }) => {
   const longPressEvent = useLongPress(onLongPress, delay);
   return (
     <Component
@@ -575,7 +575,7 @@ export default function App() {
     
     return (
       <LongPressable 
-        as="div" key={item.id} delay={2500}
+        as="div" key={item.id} delay={2000}
         onLongPress={() => {
           const options = [
             { label: "Rename", icon: <Edit3 className="w-4 h-4"/>, onClick: () => handleRename(item, isMainFolder ? 'main_folders' : 'categories', isMainFolder ? setCustomMainFolders : setCustomCategories) },
@@ -911,15 +911,37 @@ function ProjectModal({ body, onClose, projects, onAddProject, user, authError, 
             {projects.length === 0 ? (
               <div className="text-center py-12 text-slate-400"><FileText className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-base">No projects added yet.</p></div>
             ) : (
-              projects.map((project, index) => (
-                <ProjectAccordion 
-                  key={project.id} project={project} theme={body.theme} index={index} user={user} authError={authError} db={db}
-                  allUpdates={allUpdates.filter(u => u.projectId === project.id)} localUpdates={localUpdates.filter(u => u.projectId === project.id)}
-                  isLoadingUpdates={isLoadingUpdates} setLocalUpdates={setLocalUpdates} setAllProjects={setAllProjects}
-                  setActionMenu={setActionMenu} setConfirmDialog={setConfirmDialog} setPromptDialog={setPromptDialog}
-                  setLinkProjectData={setLinkProjectData}
-                />
-              ))
+              <>
+                {projects.filter(p => !p.isFinished).map((project, index) => (
+                  <ProjectAccordion 
+                    key={project.id} project={project} theme={body.theme} index={index} user={user} authError={authError} db={db}
+                    allUpdates={allUpdates.filter(u => u.projectId === project.id)} localUpdates={localUpdates.filter(u => u.projectId === project.id)}
+                    isLoadingUpdates={isLoadingUpdates} setLocalUpdates={setLocalUpdates} setAllProjects={setAllProjects}
+                    setActionMenu={setActionMenu} setConfirmDialog={setConfirmDialog} setPromptDialog={setPromptDialog}
+                    setLinkProjectData={setLinkProjectData}
+                  />
+                ))}
+                
+                {projects.some(p => p.isFinished) && (
+                  <div className="pt-6 pb-2">
+                    <div className="flex items-center gap-4">
+                      <div className="h-px bg-slate-300 flex-1"></div>
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Completed Projects</span>
+                      <div className="h-px bg-slate-300 flex-1"></div>
+                    </div>
+                  </div>
+                )}
+                
+                {projects.filter(p => p.isFinished).map((project, index) => (
+                  <ProjectAccordion 
+                    key={project.id} project={project} theme={body.theme} index={index} user={user} authError={authError} db={db}
+                    allUpdates={allUpdates.filter(u => u.projectId === project.id)} localUpdates={localUpdates.filter(u => u.projectId === project.id)}
+                    isLoadingUpdates={isLoadingUpdates} setLocalUpdates={setLocalUpdates} setAllProjects={setAllProjects}
+                    setActionMenu={setActionMenu} setConfirmDialog={setConfirmDialog} setPromptDialog={setPromptDialog}
+                    setLinkProjectData={setLinkProjectData}
+                  />
+                ))}
+              </>
             )}
           </div>
         </div>
@@ -946,7 +968,7 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allUpdat
   const isSavingRef = useRef(false);
 
   const themeStyles = THEME_MAP[theme] || THEME_MAP.indigo;
-  const cardColorClass = index % 2 === 0 ? themeStyles.light : themeStyles.dark;
+  const cardColorClass = project.isFinished ? "bg-emerald-50 border-emerald-200" : (index % 2 === 0 ? themeStyles.light : themeStyles.dark);
 
   const toggleAccordion = () => setIsOpen(!isOpen);
 
@@ -1036,6 +1058,11 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allUpdat
 
   const handleProjectActions = () => {
     setActionMenu({ title: "Project Options", options: [
+      { label: project.isFinished ? "Mark as Active" : "Mark as Finished", icon: <CheckCircle2 className="w-4 h-4"/>, onClick: async () => {
+        const newStatus = !project.isFinished;
+        setAllProjects(prev => prev.map(p => p.id === project.id ? { ...p, isFinished: newStatus } : p));
+        if (user && !authError) { try { await updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', project.id), { isFinished: newStatus }); } catch (e){} }
+      }},
       { label: "Make a Copy (Link)", icon: <Copy className="w-4 h-4"/>, onClick: () => setLinkProjectData(project) },
       { label: "Edit Name", icon: <Edit3 className="w-4 h-4"/>, onClick: () => setPromptDialog({ title: "Edit Project Name", defaultValue: project.name, onConfirm: async (n) => {
         setAllProjects(prev => prev.map(p => p.id === project.id ? { ...p, name: n } : p));
@@ -1070,13 +1097,15 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allUpdat
   return (
     <div className={`rounded-xl border shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md ${cardColorClass}`}>
       <LongPressable 
-        as="button" onLongPress={handleProjectActions} onClick={toggleAccordion} delay={2500}
+        as="button" onLongPress={handleProjectActions} onClick={toggleAccordion} delay={2000}
         className="w-full px-4 sm:px-5 py-3 sm:py-4 flex items-center justify-between bg-transparent hover:bg-black/5 transition-colors text-left"
       >
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-white/60 shadow-sm hidden sm:block"><FileText className={`w-5 h-5 ${themeStyles.text}`} /></div>
+          <div className="p-2 rounded-lg bg-white/60 shadow-sm hidden sm:block"><FileText className={`w-5 h-5 ${project.isFinished ? 'text-emerald-700' : themeStyles.text}`} /></div>
           <div>
-            <h3 className={`text-sm sm:text-base font-bold ${themeStyles.text}`}>{project.name}</h3>
+            <h3 className={`text-sm sm:text-base font-bold ${project.isFinished ? 'text-emerald-900' : themeStyles.text}`}>
+              {project.name} {project.isFinished && <CheckCircle2 className="inline-block w-4 h-4 ml-1 text-emerald-600" />}
+            </h3>
             <p className="text-[10px] sm:text-xs opacity-70 font-medium mt-0.5 flex items-center gap-1"><Calendar className="w-3 h-3" /> {formatDate(project.createdAt)}</p>
           </div>
         </div>
@@ -1128,7 +1157,7 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allUpdat
                      </form>
                   </div>
                 ) : (
-                  <LongPressable delay={2500} onLongPress={() => setActionMenu({ title: "Update Options", options: [{ label: "Edit", icon: <Edit3 className="w-4 h-4"/>, onClick: () => startEditing(update) }, { label: "Delete", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDeleteUpdate(update) }]})} className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 hover:bg-slate-50 cursor-pointer">
+                  <LongPressable delay={2000} onLongPress={() => setActionMenu({ title: "Update Options", options: [{ label: "Edit", icon: <Edit3 className="w-4 h-4"/>, onClick: () => startEditing(update) }, { label: "Delete", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDeleteUpdate(update) }]})} className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 hover:bg-slate-50 cursor-pointer">
                     <div className="flex gap-2 mb-1"><span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">Published</span><span className="text-[10px] text-slate-400">{formatDate(update.timestamp)}</span></div>
                     {update.text && <div className="text-sm text-slate-700 whitespace-pre-wrap">{update.text}</div>}
                     <div className="mt-2 flex gap-2">
