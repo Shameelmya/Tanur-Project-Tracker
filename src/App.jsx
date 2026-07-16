@@ -1158,7 +1158,7 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allUpdat
                   </div>
                 ) : (
                   <LongPressable delay={2000} onLongPress={() => setActionMenu({ title: "Update Options", options: [{ label: "Edit", icon: <Edit3 className="w-4 h-4"/>, onClick: () => startEditing(update) }, { label: "Delete", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDeleteUpdate(update) }]})} className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 hover:bg-slate-50 cursor-pointer">
-                    <div className="flex gap-2 mb-1"><span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">Published</span><span className="text-[10px] text-slate-400">{formatDate(update.timestamp)}</span></div>
+                    <div className="flex items-center gap-2 mb-1"><span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">Published</span><span className="text-xs font-bold text-slate-600">{formatDate(update.timestamp)}</span></div>
                     {update.text && <div className="text-sm text-slate-700 whitespace-pre-wrap">{update.text}</div>}
                     <div className="mt-2 flex gap-2">
                       {update.attachments?.map((att, i) => att.type === 'pdf' ? (
