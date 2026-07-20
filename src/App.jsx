@@ -305,6 +305,7 @@ export default function App() {
   const fileInputRef = useRef(null);
 
   const [linkProjectData, setLinkProjectData] = useState(null);
+  const [wuDayFolder, setWuDayFolder] = useState(null);
 
   const handleExportJSON = async () => {
     try {
@@ -550,6 +551,22 @@ export default function App() {
     });
   };
 
+  const handleSaveWuDay = async (folder, dayValue) => {
+    const isMain = INITIAL_MAIN_FOLDERS.some(m => m.id === folder.id) || customMainFolders.some(m => m.id === folder.id);
+    const collectionName = isMain ? 'main_folders' : 'categories';
+    const setter = isMain ? setCustomMainFolders : setCustomCategories;
+    
+    setter(prev => {
+      const idx = prev.findIndex(c => c.id === folder.id);
+      if(idx >= 0) { const arr = [...prev]; arr[idx] = { ...arr[idx], wuDay: dayValue }; return arr; }
+      return [...prev, { ...folder, wuDay: dayValue }];
+    });
+
+    if (user && !authError) {
+      try { await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', collectionName, folder.id), { wuDay: dayValue }, { merge: true }); } catch (err) { console.error(err); }
+    }
+  };
+
   const handleDelete = (item, collectionName, localSetter) => {
     setTypeToDeleteDialog({
        title: `Delete ${collectionName === 'main_folders' ? 'Main Folder' : 'Sub Folder'}`,
@@ -579,6 +596,7 @@ export default function App() {
         onLongPress={() => {
           const options = [
             { label: "Rename", icon: <Edit3 className="w-4 h-4"/>, onClick: () => handleRename(item, isMainFolder ? 'main_folders' : 'categories', isMainFolder ? setCustomMainFolders : setCustomCategories) },
+            { label: "Weekly Update Day", icon: <Calendar className="w-4 h-4"/>, onClick: () => setWuDayFolder(item) },
             { label: "Delete", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDelete(item, isMainFolder ? 'main_folders' : 'categories', isMainFolder ? setCustomMainFolders : setCustomCategories) }
           ];
           if (!isMainFolder) {
@@ -691,6 +709,10 @@ export default function App() {
         />
       )}
       
+      {wuDayFolder && (
+        <WuDayModal folder={wuDayFolder} onClose={() => setWuDayFolder(null)} onSave={handleSaveWuDay} />
+      )}
+      
       {linkProjectData && (
         <LinkProjectModal
           project={linkProjectData}
@@ -781,6 +803,7 @@ export default function App() {
       {activeSubFolder && (
         <ProjectModal 
           body={activeSubFolder} 
+          allSubFolders={allSubFolders}
           onClose={() => setActiveSubFolder(null)}
           projects={allProjects.filter(p => p.localBodyIds && p.localBodyIds.includes(activeSubFolder.id))}
           onAddProject={(name) => handleAddProject([activeSubFolder.id], name)}
@@ -852,7 +875,7 @@ function QuickAddModal({ onClose, onSave, mainFolders, allSubFolders }) {
 }
 
 // --- PROJECT MODAL & ACCORDION (Preserved full logic) ---
-function ProjectModal({ body, onClose, projects, onAddProject, user, authError, db, localUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData }) {
+function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, user, authError, db, localUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData }) {
   const [isAddingProject, setIsAddingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [allUpdates, setAllUpdates] = useState([]);
@@ -915,6 +938,7 @@ function ProjectModal({ body, onClose, projects, onAddProject, user, authError, 
                 {projects.filter(p => !p.isFinished).map((project, index) => (
                   <ProjectAccordion 
                     key={project.id} project={project} theme={body.theme} index={index} user={user} authError={authError} db={db}
+                    allSubFolders={allSubFolders}
                     allUpdates={allUpdates.filter(u => u.projectId === project.id)} localUpdates={localUpdates.filter(u => u.projectId === project.id)}
                     isLoadingUpdates={isLoadingUpdates} setLocalUpdates={setLocalUpdates} setAllProjects={setAllProjects}
                     setActionMenu={setActionMenu} setConfirmDialog={setConfirmDialog} setPromptDialog={setPromptDialog}
@@ -935,6 +959,7 @@ function ProjectModal({ body, onClose, projects, onAddProject, user, authError, 
                 {projects.filter(p => p.isFinished).map((project, index) => (
                   <ProjectAccordion 
                     key={project.id} project={project} theme={body.theme} index={index} user={user} authError={authError} db={db}
+                    allSubFolders={allSubFolders}
                     allUpdates={allUpdates.filter(u => u.projectId === project.id)} localUpdates={localUpdates.filter(u => u.projectId === project.id)}
                     isLoadingUpdates={isLoadingUpdates} setLocalUpdates={setLocalUpdates} setAllProjects={setAllProjects}
                     setActionMenu={setActionMenu} setConfirmDialog={setConfirmDialog} setPromptDialog={setPromptDialog}
@@ -950,7 +975,7 @@ function ProjectModal({ body, onClose, projects, onAddProject, user, authError, 
   );
 }
 
-function ProjectAccordion({ project, theme, index, user, authError, db, allUpdates, localUpdates, isLoadingUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData }) {
+function ProjectAccordion({ project, theme, index, user, authError, db, allSubFolders, allUpdates, localUpdates, isLoadingUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData }) {
   const [isOpen, setIsOpen] = useState(false);
   const [updateText, setUpdateText] = useState('');
   const [attachments, setAttachments] = useState([]);
@@ -967,8 +992,28 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allUpdat
   const fileInputRef = useRef(null);
   const isSavingRef = useRef(false);
 
+  const isSameWeek = (dateString) => {
+    if (!dateString) return false;
+    const now = new Date();
+    const d = new Date(dateString);
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0,0,0,0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23,59,59,999);
+    return d >= startOfWeek && d <= endOfWeek;
+  };
+
+  const currentDay = new Date().getDay();
+  const folderHasTodayWuDay = project.localBodyIds && project.localBodyIds.some(fid => {
+    const folder = allSubFolders?.find(sf => sf.id === fid);
+    return folder && folder.wuDay === currentDay;
+  });
+  const needsWeeklyUpdate = !project.isFinished && folderHasTodayWuDay && !isSameWeek(project.lastWeeklyUpdate);
+
   const themeStyles = THEME_MAP[theme] || THEME_MAP.indigo;
-  const cardColorClass = project.isFinished ? "bg-emerald-50 border-emerald-200" : (index % 2 === 0 ? themeStyles.light : themeStyles.dark);
+  const cardColorClass = project.isFinished ? "bg-emerald-50 border-emerald-200" : (needsWeeklyUpdate ? "bg-red-50 border-red-200 shadow-md border-2" : (index % 2 === 0 ? themeStyles.light : themeStyles.dark));
 
   const toggleAccordion = () => setIsOpen(!isOpen);
 
@@ -1008,16 +1053,25 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allUpdat
             .catch(() => ({ type: att.type, url: att.data, name: att.name }))
           ));
         }
-        const newUpdate = { id: updateId, projectId: project.id, text: updateText, attachments: finalAttachments, timestamp: new Date().toISOString() };
+        const newUpdate = { id: updateId, projectId: project.id, text: updateText, attachments: finalAttachments, timestamp: new Date().toISOString(), isWeeklyUpdate: needsWeeklyUpdate };
+        const projectUpdate = { updateCount: (project.updateCount || 0) + 1 };
+        if (needsWeeklyUpdate) projectUpdate.lastWeeklyUpdate = new Date().toISOString();
         await Promise.all([
           setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'project_updates', updateId), newUpdate),
-          updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', project.id), { updateCount: (project.updateCount || 0) + 1 })
+          updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', project.id), projectUpdate)
         ]);
       } else throw new Error("Fallback local");
     } catch (err) {
-      const newUpdate = { id: updateId, projectId: project.id, text: updateText, attachments: attachments.map(att => ({ type: att.type, url: att.data, name: att.name })), timestamp: new Date().toISOString() };
+      const newUpdate = { id: updateId, projectId: project.id, text: updateText, attachments: attachments.map(att => ({ type: att.type, url: att.data, name: att.name })), timestamp: new Date().toISOString(), isWeeklyUpdate: needsWeeklyUpdate };
       setLocalUpdates(prev => [newUpdate, ...prev]);
-      setAllProjects(prev => prev.map(p => p.id === project.id ? { ...p, updateCount: (p.updateCount || 0) + 1 } : p));
+      setAllProjects(prev => prev.map(p => {
+        if (p.id === project.id) {
+          const proj = { ...p, updateCount: (p.updateCount || 0) + 1 };
+          if (needsWeeklyUpdate) proj.lastWeeklyUpdate = new Date().toISOString();
+          return proj;
+        }
+        return p;
+      }));
     } finally {
       setUpdateText(''); setAttachments([]); isSavingRef.current = false; setIsUploading(false);
     }
@@ -1110,6 +1164,14 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allUpdat
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {needsWeeklyUpdate && (
+            <button 
+               onClick={(e) => { e.stopPropagation(); setIsOpen(true); setTimeout(() => fileInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100); }} 
+               className="text-[10px] sm:text-xs bg-red-600 text-white font-bold px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg hover:bg-red-700 shadow-sm animate-pulse"
+            >
+               Add Update
+            </button>
+          )}
           <span className="text-[10px] font-semibold bg-white/70 px-2 py-1 rounded-full">{project.updateCount || 0} Updates</span>
           <div className={`p-1 rounded-full bg-white/70 transition-transform ${isOpen ? 'rotate-180' : ''}`}><ChevronDown className="w-4 h-4" /></div>
         </div>
@@ -1157,8 +1219,11 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allUpdat
                      </form>
                   </div>
                 ) : (
-                  <LongPressable delay={2000} onLongPress={() => setActionMenu({ title: "Update Options", options: [{ label: "Edit", icon: <Edit3 className="w-4 h-4"/>, onClick: () => startEditing(update) }, { label: "Delete", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDeleteUpdate(update) }]})} className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 hover:bg-slate-50 cursor-pointer">
-                    <div className="flex items-center gap-2 mb-1"><span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">Published</span><span className="text-xs font-bold text-slate-600">{formatDate(update.timestamp)}</span></div>
+                  <LongPressable delay={2000} onLongPress={() => setActionMenu({ title: "Update Options", options: [{ label: "Edit", icon: <Edit3 className="w-4 h-4"/>, onClick: () => startEditing(update) }, { label: "Delete", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDeleteUpdate(update) }]})} className={`bg-white p-3 rounded-xl shadow-sm border ${update.isWeeklyUpdate ? 'border-red-400 bg-red-50/30' : 'border-slate-100'} hover:bg-slate-50 cursor-pointer`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${update.isWeeklyUpdate ? 'bg-red-100 text-red-700' : 'text-indigo-600 bg-indigo-50'}`}>{update.isWeeklyUpdate ? 'Weekly Update' : 'Published'}</span>
+                      <span className={`text-xs font-bold ${update.isWeeklyUpdate ? 'text-red-600' : 'text-slate-600'}`}>{formatDate(update.timestamp)}</span>
+                    </div>
                     {update.text && <div className="text-sm text-slate-700 whitespace-pre-wrap">{update.text}</div>}
                     <div className="mt-2 flex gap-2">
                       {update.attachments?.map((att, i) => att.type === 'pdf' ? (
@@ -1235,6 +1300,50 @@ function LinkProjectModal({ project, onClose, onSave, mainFolders, allSubFolders
           </div>
           <button type="submit" disabled={selectedIds.length === 0} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition-colors shadow-sm shrink-0">
             Save Links ({selectedIds.length} location{selectedIds.length !== 1 ? 's' : ''})
+          </button>
+        </form>
+    </div>
+  );
+}
+
+// --- WU DAY MODAL ---
+function WuDayModal({ folder, onClose, onSave }) {
+  const days = [
+    { value: 0, label: 'Sunday' },
+    { value: 1, label: 'Monday' },
+    { value: 2, label: 'Tuesday' },
+    { value: 3, label: 'Wednesday' },
+    { value: 4, label: 'Thursday' },
+    { value: 5, label: 'Friday' },
+    { value: 6, label: 'Saturday' },
+    { value: null, label: 'None' }
+  ];
+  const [selectedDay, setSelectedDay] = useState(folder.wuDay ?? null);
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    onSave(folder, selectedDay);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl relative flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+        <button onClick={onClose} className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button>
+        <h3 className="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2"><Calendar className="w-5 h-5 text-indigo-600"/> Weekly Update Day</h3>
+        <p className="text-xs text-slate-500 mb-4">Select the day when projects in <strong>{folder.name}</strong> require an update.</p>
+        
+        <form onSubmit={handleSave} className="flex flex-col flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto mb-4 space-y-2">
+            {days.map(day => (
+              <label key={day.label} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedDay === day.value ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200 hover:border-indigo-100'}`}>
+                <input type="radio" name="wuday" value={day.value} checked={selectedDay === day.value} onChange={() => setSelectedDay(day.value)} className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500" />
+                <span className="text-sm font-semibold text-slate-700">{day.label}</span>
+              </label>
+            ))}
+          </div>
+          <button type="submit" className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm transition-colors shadow-sm shrink-0">
+            Save
           </button>
         </form>
       </div>
