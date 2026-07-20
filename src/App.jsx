@@ -1302,6 +1302,7 @@ function LinkProjectModal({ project, onClose, onSave, mainFolders, allSubFolders
             Save Links ({selectedIds.length} location{selectedIds.length !== 1 ? 's' : ''})
           </button>
         </form>
+      </div>
     </div>
   );
 }
