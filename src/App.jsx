@@ -1316,7 +1316,7 @@ function WuDayModal({ folder, onClose, onSave }) {
     { value: 4, label: 'Thursday' },
     { value: 5, label: 'Friday' },
     { value: 6, label: 'Saturday' },
-    { value: null, label: 'None' }
+    { value: null, label: 'No Day' }
   ];
   const [selectedDay, setSelectedDay] = useState(folder.wuDay ?? null);
 
