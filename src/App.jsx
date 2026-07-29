@@ -972,18 +972,17 @@ function ContactListModal({ folder, onClose, onSaveContact, setActionMenu }) {
                   ]
                 });
               }} className="p-3 bg-white border border-slate-200 rounded-xl shadow-sm flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors">
-                <div>
+                <div className="flex-1">
                   <div className="font-bold text-sm text-slate-800">{c.name}</div>
                   {c.designation && <div className="text-xs text-slate-500">{c.designation}</div>}
-                  <div className="text-xs text-slate-600 font-mono mt-0.5">{c.phone}</div>
                 </div>
-                <div className="flex items-center gap-1 sm:gap-2">
+                <div className="flex items-center gap-1 sm:gap-2 text-right">
+                  <a href={`tel:${c.phone}`} onClick={e => e.stopPropagation()} className="font-bold text-sm sm:text-base text-indigo-700 hover:text-indigo-900 transition-colors">
+                    {c.phone}
+                  </a>
                   <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(c.phone); }} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Copy Number">
                     <Copy className="w-4 h-4" />
                   </button>
-                  <a href={`tel:${c.phone}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1.5 bg-green-50 text-green-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-100 transition-colors">
-                    <PhoneCall className="w-3 h-3"/> Call
-                  </a>
                 </div>
               </LongPressable>
             ))
