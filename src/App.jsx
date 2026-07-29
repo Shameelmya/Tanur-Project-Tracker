@@ -275,6 +275,28 @@ function TypeToDeleteDialog({ dialog, onClose }) {
   );
 }
 
+const getDayIndicator = () => {
+  const startDate = new Date('2026-05-21T00:00:00');
+  const today = new Date();
+  startDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  
+  const diffTime = today - startDate;
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  const dayNumber = diffDays + 1;
+  
+  const getOrdinal = (n) => {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+  
+  if (dayNumber > 0) {
+    return `This is ${getOrdinal(dayNumber)} day`;
+  }
+  return "";
+};
+
 export default function App() {
   // Navigation State
   const [activeMainFolder, setActiveMainFolder] = useState(null);
@@ -661,9 +683,16 @@ export default function App() {
               <MapIcon className="w-5 h-5 sm:w-7 sm:h-7 text-indigo-600" />
               {activeMainFolder ? activeMainFolder.name : "Tanur Projects Tracker"}
               {!activeMainFolder && (
-                <span className="ml-1 sm:ml-2 text-[10px] sm:text-xs font-bold bg-indigo-100 text-indigo-800 px-2 sm:px-3 py-1 rounded-full flex items-center gap-1">
-                  <Star className="w-3 h-3"/> {allProjects.length} Projects Total
-                </span>
+                <>
+                  <span className="ml-1 sm:ml-2 text-[10px] sm:text-xs font-bold bg-indigo-100 text-indigo-800 px-2 sm:px-3 py-1 rounded-full flex items-center gap-1">
+                    <Star className="w-3 h-3"/> {allProjects.length} Projects Total
+                  </span>
+                  {getDayIndicator() && (
+                    <span className="hidden sm:flex ml-1 sm:ml-2 text-[10px] sm:text-xs font-bold bg-amber-100 text-amber-800 px-2 sm:px-3 py-1 rounded-full items-center gap-1">
+                      <Zap className="w-3 h-3"/> {getDayIndicator()}
+                    </span>
+                  )}
+                </>
               )}
             </h1>
           </div>
