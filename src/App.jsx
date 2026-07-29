@@ -892,19 +892,46 @@ function QuickAddModal({ onClose, onSave, mainFolders, allSubFolders }) {
 }
 
 // --- CONTACT LIST MODAL ---
-function ContactListModal({ folder, onClose, onSaveContact }) {
+function ContactListModal({ folder, onClose, onSaveContact, setActionMenu }) {
   const [isAdding, setIsAdding] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState('');
   const [designation, setDesignation] = useState('');
   const [phone, setPhone] = useState('');
   const contacts = folder.contacts || [];
 
+  const handleEdit = (c) => {
+    setName(c.name);
+    setDesignation(c.designation || '');
+    setPhone(c.phone);
+    setEditingId(c.id);
+    setIsAdding(true);
+  };
+
+  const handleDelete = (c) => {
+    if (window.confirm(`Delete ${c.name}?`)) {
+      onSaveContact(folder, contacts.filter(contact => contact.id !== c.id));
+    }
+  };
+
   const handleSave = (e) => {
     e.preventDefault();
     if (!name.trim() || !phone.trim()) return;
-    const newContact = { id: Date.now().toString(), name, designation, phone };
-    onSaveContact(folder, [...contacts, newContact]);
-    setName(''); setDesignation(''); setPhone(''); setIsAdding(false);
+    
+    let updatedContacts;
+    if (editingId) {
+      updatedContacts = contacts.map(c => c.id === editingId ? { ...c, name, designation, phone } : c);
+    } else {
+      updatedContacts = [...contacts, { id: Date.now().toString(), name, designation, phone }];
+    }
+    onSaveContact(folder, updatedContacts);
+    setName(''); setDesignation(''); setPhone(''); setIsAdding(false); setEditingId(null);
+  };
+
+  const cancelAddOrEdit = () => {
+    setIsAdding(false);
+    setEditingId(null);
+    setName(''); setDesignation(''); setPhone('');
   };
 
   return (
@@ -913,7 +940,7 @@ function ContactListModal({ folder, onClose, onSaveContact }) {
         <button onClick={onClose} className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button>
         <div className="flex justify-between items-center mb-4 pr-6">
           <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2"><PhoneCall className="w-5 h-5 text-indigo-600"/> Contacts</h3>
-          <button onClick={() => setIsAdding(!isAdding)} className="p-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-full transition-colors"><Plus className="w-4 h-4"/></button>
+          <button onClick={() => { setIsAdding(!isAdding); setEditingId(null); setName(''); setDesignation(''); setPhone(''); }} className="p-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-full transition-colors"><Plus className="w-4 h-4"/></button>
         </div>
         
         {isAdding && (
@@ -922,7 +949,7 @@ function ContactListModal({ folder, onClose, onSaveContact }) {
             <input type="text" placeholder="Designation" value={designation} onChange={e => setDesignation(e.target.value)} className="w-full px-3 py-2 text-sm rounded border border-slate-300 mb-2 focus:ring-2 focus:ring-indigo-500" />
             <input type="tel" placeholder="Phone Number *" value={phone} onChange={e => setPhone(e.target.value)} className="w-full px-3 py-2 text-sm rounded border border-slate-300 mb-3 focus:ring-2 focus:ring-indigo-500" required />
             <div className="flex gap-2">
-              <button type="button" onClick={() => setIsAdding(false)} className="flex-1 py-1.5 bg-slate-200 text-slate-700 text-xs font-bold rounded">Cancel</button>
+              <button type="button" onClick={cancelAddOrEdit} className="flex-1 py-1.5 bg-slate-200 text-slate-700 text-xs font-bold rounded">Cancel</button>
               <button type="submit" disabled={!name.trim() || !phone.trim()} className="flex-1 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded disabled:opacity-50">Save</button>
             </div>
           </form>
@@ -933,15 +960,23 @@ function ContactListModal({ folder, onClose, onSaveContact }) {
             <p className="text-sm text-slate-400 text-center py-4">No contacts added yet.</p>
           ) : (
             contacts.map(c => (
-              <div key={c.id} className="p-3 bg-white border border-slate-200 rounded-xl shadow-sm flex justify-between items-center">
+              <LongPressable as="div" key={c.id} delay={1000} onLongPress={() => {
+                setActionMenu({
+                  title: "Contact Options",
+                  options: [
+                    { label: "Edit", icon: <Edit3 className="w-4 h-4"/>, onClick: () => handleEdit(c) },
+                    { label: "Delete", icon: <Trash2 className="w-4 h-4"/>, danger: true, onClick: () => handleDelete(c) }
+                  ]
+                });
+              }} className="p-3 bg-white border border-slate-200 rounded-xl shadow-sm flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors">
                 <div>
                   <div className="font-bold text-sm text-slate-800">{c.name}</div>
                   {c.designation && <div className="text-xs text-slate-500">{c.designation}</div>}
                 </div>
-                <a href={`tel:${c.phone}`} className="flex items-center gap-1.5 bg-green-50 text-green-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-100 transition-colors">
+                <a href={`tel:${c.phone}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1.5 bg-green-50 text-green-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-100 transition-colors">
                   <PhoneCall className="w-3 h-3"/> Call
                 </a>
-              </div>
+              </LongPressable>
             ))
           )}
         </div>
@@ -1006,6 +1041,7 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
             folder={body} 
             onClose={() => setShowContactsModal(false)} 
             onSaveContact={onUpdateFolderContacts} 
+            setActionMenu={setActionMenu}
           />
         )}
 
