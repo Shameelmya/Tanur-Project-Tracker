@@ -578,6 +578,9 @@ export default function App() {
       return [...prev, { ...folder, contacts: updatedContacts }];
     });
 
+    setActiveSubFolder(prev => prev && prev.id === folder.id ? { ...prev, contacts: updatedContacts } : prev);
+    setActiveMainFolder(prev => prev && prev.id === folder.id ? { ...prev, contacts: updatedContacts } : prev);
+
     if (user && !authError) {
       try { await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', collectionName, folder.id), { contacts: updatedContacts }, { merge: true }); } catch (err) { console.error(err); }
     }
@@ -946,7 +949,7 @@ function ContactListModal({ folder, onClose, onSaveContact, setActionMenu }) {
         {isAdding && (
           <form onSubmit={handleSave} className="mb-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
             <input type="text" placeholder="Name *" value={name} onChange={e => setName(e.target.value)} className="w-full px-3 py-2 text-sm rounded border border-slate-300 mb-2 focus:ring-2 focus:ring-indigo-500" required />
-            <input type="text" placeholder="Designation" value={designation} onChange={e => setDesignation(e.target.value)} className="w-full px-3 py-2 text-sm rounded border border-slate-300 mb-2 focus:ring-2 focus:ring-indigo-500" />
+            <input type="text" placeholder="Designation (Optional)" value={designation} onChange={e => setDesignation(e.target.value)} className="w-full px-3 py-2 text-sm rounded border border-slate-300 mb-2 focus:ring-2 focus:ring-indigo-500" />
             <input type="tel" placeholder="Phone Number *" value={phone} onChange={e => setPhone(e.target.value)} className="w-full px-3 py-2 text-sm rounded border border-slate-300 mb-3 focus:ring-2 focus:ring-indigo-500" required />
             <div className="flex gap-2">
               <button type="button" onClick={cancelAddOrEdit} className="flex-1 py-1.5 bg-slate-200 text-slate-700 text-xs font-bold rounded">Cancel</button>
