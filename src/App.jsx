@@ -4,7 +4,7 @@ import {
   X, Plus, ChevronDown, Image as ImageIcon, 
   Send, Calendar, Clock, CheckCircle2, FileText, Loader2, AlertTriangle, HelpCircle,
   Edit3, Trash2, Paperclip, User, Users, Folder, Star, Zap, CheckSquare,
-  ArrowLeft, MoveRight, Briefcase, FolderTree, Settings, Download, Upload, Copy
+  ArrowLeft, MoveRight, Briefcase, FolderTree, Settings, Download, Upload, Copy, PhoneCall
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -567,6 +567,22 @@ export default function App() {
     }
   };
 
+  const handleUpdateFolderContacts = async (folder, updatedContacts) => {
+    const isMain = INITIAL_MAIN_FOLDERS.some(m => m.id === folder.id) || customMainFolders.some(m => m.id === folder.id);
+    const collectionName = isMain ? 'main_folders' : 'categories';
+    const setter = isMain ? setCustomMainFolders : setCustomCategories;
+    
+    setter(prev => {
+      const idx = prev.findIndex(c => c.id === folder.id);
+      if(idx >= 0) { const arr = [...prev]; arr[idx] = { ...arr[idx], contacts: updatedContacts }; return arr; }
+      return [...prev, { ...folder, contacts: updatedContacts }];
+    });
+
+    if (user && !authError) {
+      try { await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', collectionName, folder.id), { contacts: updatedContacts }, { merge: true }); } catch (err) { console.error(err); }
+    }
+  };
+
   const handleDelete = (item, collectionName, localSetter) => {
     setTypeToDeleteDialog({
        title: `Delete ${collectionName === 'main_folders' ? 'Main Folder' : 'Sub Folder'}`,
@@ -811,6 +827,7 @@ export default function App() {
           localUpdates={localUpdates} setLocalUpdates={setLocalUpdates} setAllProjects={setAllProjects}
           setActionMenu={setActionMenu} setConfirmDialog={setTypeToDeleteDialog} setPromptDialog={setPromptDialog}
           setLinkProjectData={setLinkProjectData}
+          onUpdateFolderContacts={handleUpdateFolderContacts}
         />
       )}
     </div>
@@ -874,9 +891,69 @@ function QuickAddModal({ onClose, onSave, mainFolders, allSubFolders }) {
   );
 }
 
+// --- CONTACT LIST MODAL ---
+function ContactListModal({ folder, onClose, onSaveContact }) {
+  const [isAdding, setIsAdding] = useState(false);
+  const [name, setName] = useState('');
+  const [designation, setDesignation] = useState('');
+  const [phone, setPhone] = useState('');
+  const contacts = folder.contacts || [];
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    if (!name.trim() || !phone.trim()) return;
+    const newContact = { id: Date.now().toString(), name, designation, phone };
+    onSaveContact(folder, [...contacts, newContact]);
+    setName(''); setDesignation(''); setPhone(''); setIsAdding(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl relative flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+        <button onClick={onClose} className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button>
+        <div className="flex justify-between items-center mb-4 pr-6">
+          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2"><PhoneCall className="w-5 h-5 text-indigo-600"/> Contacts</h3>
+          <button onClick={() => setIsAdding(!isAdding)} className="p-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-full transition-colors"><Plus className="w-4 h-4"/></button>
+        </div>
+        
+        {isAdding && (
+          <form onSubmit={handleSave} className="mb-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <input type="text" placeholder="Name *" value={name} onChange={e => setName(e.target.value)} className="w-full px-3 py-2 text-sm rounded border border-slate-300 mb-2 focus:ring-2 focus:ring-indigo-500" required />
+            <input type="text" placeholder="Designation" value={designation} onChange={e => setDesignation(e.target.value)} className="w-full px-3 py-2 text-sm rounded border border-slate-300 mb-2 focus:ring-2 focus:ring-indigo-500" />
+            <input type="tel" placeholder="Phone Number *" value={phone} onChange={e => setPhone(e.target.value)} className="w-full px-3 py-2 text-sm rounded border border-slate-300 mb-3 focus:ring-2 focus:ring-indigo-500" required />
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setIsAdding(false)} className="flex-1 py-1.5 bg-slate-200 text-slate-700 text-xs font-bold rounded">Cancel</button>
+              <button type="submit" disabled={!name.trim() || !phone.trim()} className="flex-1 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded disabled:opacity-50">Save</button>
+            </div>
+          </form>
+        )}
+
+        <div className="flex-1 overflow-y-auto space-y-3">
+          {contacts.length === 0 && !isAdding ? (
+            <p className="text-sm text-slate-400 text-center py-4">No contacts added yet.</p>
+          ) : (
+            contacts.map(c => (
+              <div key={c.id} className="p-3 bg-white border border-slate-200 rounded-xl shadow-sm flex justify-between items-center">
+                <div>
+                  <div className="font-bold text-sm text-slate-800">{c.name}</div>
+                  {c.designation && <div className="text-xs text-slate-500">{c.designation}</div>}
+                </div>
+                <a href={`tel:${c.phone}`} className="flex items-center gap-1.5 bg-green-50 text-green-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-100 transition-colors">
+                  <PhoneCall className="w-3 h-3"/> Call
+                </a>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- PROJECT MODAL & ACCORDION (Preserved full logic) ---
-function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, user, authError, db, localUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData }) {
+function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, user, authError, db, localUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData, onUpdateFolderContacts }) {
   const [isAddingProject, setIsAddingProject] = useState(false);
+  const [showContactsModal, setShowContactsModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [allUpdates, setAllUpdates] = useState([]);
   const [isLoadingUpdates, setIsLoadingUpdates] = useState(false);
@@ -914,12 +991,23 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
             <p className="mt-1 text-white/80 font-medium text-xs sm:text-sm">Manage projects for this sub-folder.</p>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
+            <button onClick={() => setShowContactsModal(true)} className="p-2 sm:p-2.5 bg-white/20 text-white hover:bg-white/30 rounded-full transition-transform hover:scale-105 shadow-md">
+              <PhoneCall className="w-5 h-5 sm:w-6 sm:h-6" />
+            </button>
             <button onClick={() => setIsAddingProject(!isAddingProject)} className="p-2 sm:p-2.5 bg-white text-slate-900 hover:bg-slate-100 rounded-full transition-transform hover:scale-105 shadow-md">
               <Plus className={`w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 ${isAddingProject ? 'rotate-45' : ''}`} />
             </button>
             <button onClick={onClose} className="p-2 sm:p-2.5 bg-black/20 hover:bg-black/30 text-white rounded-full transition-colors backdrop-blur-sm"><X className="w-5 h-5 sm:w-6 sm:h-6" /></button>
           </div>
         </div>
+
+        {showContactsModal && (
+          <ContactListModal 
+            folder={body} 
+            onClose={() => setShowContactsModal(false)} 
+            onSaveContact={onUpdateFolderContacts} 
+          />
+        )}
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50">
           {isAddingProject && (
