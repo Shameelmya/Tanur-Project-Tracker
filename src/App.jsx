@@ -1327,6 +1327,7 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allSubFo
         className="w-full px-4 sm:px-5 py-3 sm:py-4 flex items-center justify-between bg-transparent hover:bg-black/5 transition-colors text-left"
       >
         <div className="flex items-center gap-3">
+          <div className={`text-sm sm:text-base font-bold w-6 sm:w-8 text-center shrink-0 ${project.isFinished ? 'text-emerald-600/60' : themeStyles.text + '/60'}`}>{index + 1}.</div>
           <div className="p-2 rounded-lg bg-white/60 shadow-sm hidden sm:block"><FileText className={`w-5 h-5 ${project.isFinished ? 'text-emerald-700' : themeStyles.text}`} /></div>
           <div>
             <h3 className={`text-sm sm:text-base font-bold ${project.isFinished ? 'text-emerald-900' : themeStyles.text}`}>
