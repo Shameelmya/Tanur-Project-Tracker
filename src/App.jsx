@@ -6,9 +6,7 @@ import {
   Edit3, Trash2, Paperclip, User, Users, Folder, Star, Zap, CheckSquare,
   ArrowLeft, MoveRight, Briefcase, FolderTree, Settings, Download, Upload, Copy, PhoneCall, Printer
 } from 'lucide-react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { NotoSansMalayalamBase64 } from './fonts/NotoSansMalayalam';
+import html2pdf from 'html2pdf.js';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from "firebase/app";
@@ -1066,99 +1064,82 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
     onAddProject(newProjectName); setNewProjectName(''); setIsAddingProject(false);
   };
 
-  const generatePDF = () => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    
-    // Add Custom Font for Malayalam
-    doc.addFileToVFS('NotoSansMalayalam-Regular.ttf', NotoSansMalayalamBase64);
-    doc.addFont('NotoSansMalayalam-Regular.ttf', 'NotoSansMalayalam', 'normal');
-    
-    // Header
-    doc.setFont('NotoSansMalayalam', 'normal');
-    doc.setFontSize(18);
-    doc.setTextColor(30, 41, 59); // slate-800
-    doc.text(`Project Report: ${body.name}`, 14, 20);
-    
-    doc.setFontSize(10);
-    doc.setTextColor(100, 116, 139); // slate-500
-    doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 28);
-    doc.text(`Total Projects: ${projects.length}`, 14, 34);
+  const generatePDF = async () => {
+    let html = `
+      <div style="padding: 40px; font-family: system-ui, -apple-system, sans-serif; color: #1e293b;">
+        <h1 style="font-size: 24px; font-weight: bold; margin-bottom: 5px;">Project Report: ${body.name}</h1>
+        <p style="font-size: 14px; color: #64748b; margin-bottom: 5px;">Generated on: ${new Date().toLocaleString()}</p>
+        <p style="font-size: 14px; color: #64748b; margin-bottom: 30px;">Total Projects: ${projects.length}</p>
+    `;
 
-    let startY = 45;
-
-    // Projects list
     const activeProjects = projects.filter(p => !p.isFinished);
     const finishedProjects = projects.filter(p => p.isFinished);
     const sortedProjects = [...activeProjects, ...finishedProjects];
 
     sortedProjects.forEach((proj, idx) => {
-      // Check space
-      if (startY > 270) {
-        doc.addPage();
-        startY = 20;
-      }
-
-      // Project Title
-      doc.setFontSize(14);
-      doc.setTextColor(30, 41, 59);
-      doc.setFont("NotoSansMalayalam", "normal");
-      const projTitle = `${idx + 1}. ${proj.name}`;
-      
-      const splitTitle = doc.splitTextToSize(projTitle, pageWidth - 28);
-      doc.text(splitTitle, 14, startY);
-      startY += (splitTitle.length * 6) + 2;
-
-      // Status & Date
-      doc.setFontSize(10);
-      doc.setFont("NotoSansMalayalam", "normal");
-      doc.setTextColor(100, 116, 139);
       const statusText = proj.isFinished ? "Completed" : "Active";
       const dateText = new Date(proj.createdAt).toLocaleDateString();
-      doc.text(`Status: ${statusText} | Created: ${dateText}`, 14, startY);
-      startY += 8;
+      
+      html += `
+        <div style="margin-bottom: 30px; page-break-inside: avoid;">
+          <h2 style="font-size: 18px; font-weight: bold; margin-bottom: 5px;">${idx + 1}. ${proj.name}</h2>
+          <p style="font-size: 12px; color: #64748b; margin-bottom: 10px;">Status: ${statusText} | Created: ${dateText}</p>
+      `;
 
-      // Updates Table
       const projUpdates = allUpdates
         .filter(u => u.projectId === proj.id)
         .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
       if (projUpdates.length > 0) {
-        const tableData = projUpdates.map(u => {
+        html += `
+          <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px;">
+            <thead>
+              <tr style="background-color: #4f46e5; color: white;">
+                <th style="padding: 8px; text-align: left; width: 25%;">Date</th>
+                <th style="padding: 8px; text-align: left; width: 20%;">Time</th>
+                <th style="padding: 8px; text-align: left;">Update Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+        
+        projUpdates.forEach((u, i) => {
           const d = new Date(u.timestamp);
-          return [
-            d.toLocaleDateString(),
-            d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            u.text || '(Image/Attachment)'
-          ];
-        });
-
-        autoTable(doc, {
-          startY: startY,
-          head: [['Date', 'Time', 'Update Notes']],
-          body: tableData,
-          theme: 'striped',
-          headStyles: { fillColor: [79, 70, 229], font: 'NotoSansMalayalam' }, // indigo-600
-          styles: { fontSize: 9, cellPadding: 3, font: 'NotoSansMalayalam' },
-          columnStyles: {
-            0: { cellWidth: 25 },
-            1: { cellWidth: 22 },
-            2: { cellWidth: 'auto' }
-          },
-          margin: { left: 14, right: 14 }
+          const bg = i % 2 === 0 ? '#f8fafc' : '#ffffff';
+          html += `
+              <tr style="background-color: ${bg}; border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 8px;">${d.toLocaleDateString()}</td>
+                <td style="padding: 8px;">${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                <td style="padding: 8px;">${u.text || '(Image/Attachment)'}</td>
+              </tr>
+          `;
         });
         
-        startY = doc.lastAutoTable.finalY + 15;
+        html += `
+            </tbody>
+          </table>
+        `;
       } else {
-        doc.setFontSize(10);
-        doc.setTextColor(148, 163, 184); // slate-400
-        doc.setFont("NotoSansMalayalam", "normal");
-        doc.text("No updates for this project.", 14, startY);
-        startY += 15;
+        html += `<p style="font-size: 12px; color: #94a3b8; font-style: italic;">No updates for this project.</p>`;
       }
+
+      html += `</div>`;
     });
 
-    doc.save(`${body.name.replace(/\\s+/g, '_')}_Report.pdf`);
+    html += `</div>`;
+
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    
+    const opt = {
+      margin:       0,
+      filename:     `${body.name.replace(/\\s+/g, '_')}_Report.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true },
+      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opt).from(container).save();
   };
 
   const IconComponent = body.icon || Folder;
