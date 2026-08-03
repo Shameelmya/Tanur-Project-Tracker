@@ -4,8 +4,10 @@ import {
   X, Plus, ChevronDown, Image as ImageIcon, 
   Send, Calendar, Clock, CheckCircle2, FileText, Loader2, AlertTriangle, HelpCircle,
   Edit3, Trash2, Paperclip, User, Users, Folder, Star, Zap, CheckSquare,
-  ArrowLeft, MoveRight, Briefcase, FolderTree, Settings, Download, Upload, Copy, PhoneCall
+  ArrowLeft, MoveRight, Briefcase, FolderTree, Settings, Download, Upload, Copy, PhoneCall, Printer
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from "firebase/app";
@@ -1063,6 +1065,96 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
     onAddProject(newProjectName); setNewProjectName(''); setIsAddingProject(false);
   };
 
+  const generatePDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Header
+    doc.setFontSize(18);
+    doc.setTextColor(30, 41, 59); // slate-800
+    doc.text(`Project Report: ${body.name}`, 14, 20);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 28);
+    doc.text(`Total Projects: ${projects.length}`, 14, 34);
+
+    let startY = 45;
+
+    // Projects list
+    const activeProjects = projects.filter(p => !p.isFinished);
+    const finishedProjects = projects.filter(p => p.isFinished);
+    const sortedProjects = [...activeProjects, ...finishedProjects];
+
+    sortedProjects.forEach((proj, idx) => {
+      // Check space
+      if (startY > 270) {
+        doc.addPage();
+        startY = 20;
+      }
+
+      // Project Title
+      doc.setFontSize(14);
+      doc.setTextColor(30, 41, 59);
+      doc.setFont("helvetica", "bold");
+      const projTitle = `${idx + 1}. ${proj.name}`;
+      
+      const splitTitle = doc.splitTextToSize(projTitle, pageWidth - 28);
+      doc.text(splitTitle, 14, startY);
+      startY += (splitTitle.length * 6) + 2;
+
+      // Status & Date
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100, 116, 139);
+      const statusText = proj.isFinished ? "Completed" : "Active";
+      const dateText = new Date(proj.createdAt).toLocaleDateString();
+      doc.text(`Status: ${statusText} | Created: ${dateText}`, 14, startY);
+      startY += 8;
+
+      // Updates Table
+      const projUpdates = allUpdates
+        .filter(u => u.projectId === proj.id)
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+      if (projUpdates.length > 0) {
+        const tableData = projUpdates.map(u => {
+          const d = new Date(u.timestamp);
+          return [
+            d.toLocaleDateString(),
+            d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            u.text || '(Image/Attachment)'
+          ];
+        });
+
+        autoTable(doc, {
+          startY: startY,
+          head: [['Date', 'Time', 'Update Notes']],
+          body: tableData,
+          theme: 'striped',
+          headStyles: { fillColor: [79, 70, 229] }, // indigo-600
+          styles: { fontSize: 9, cellPadding: 3 },
+          columnStyles: {
+            0: { cellWidth: 25 },
+            1: { cellWidth: 22 },
+            2: { cellWidth: 'auto' }
+          },
+          margin: { left: 14, right: 14 }
+        });
+        
+        startY = doc.lastAutoTable.finalY + 15;
+      } else {
+        doc.setFontSize(10);
+        doc.setTextColor(148, 163, 184); // slate-400
+        doc.setFont("helvetica", "italic");
+        doc.text("No updates for this project.", 14, startY);
+        startY += 15;
+      }
+    });
+
+    doc.save(`${body.name.replace(/\\s+/g, '_')}_Report.pdf`);
+  };
+
   const IconComponent = body.icon || Folder;
 
   return (
@@ -1074,6 +1166,9 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
             <p className="mt-1 text-white/80 font-medium text-xs sm:text-sm">Manage projects for this sub-folder.</p>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
+            <button onClick={generatePDF} className="p-2 sm:p-2.5 bg-white/20 text-white hover:bg-white/30 rounded-full transition-transform hover:scale-105 shadow-md" title="Print to PDF">
+              <Printer className="w-5 h-5 sm:w-6 sm:h-6" />
+            </button>
             <button onClick={() => setShowContactsModal(true)} className="p-2 sm:p-2.5 bg-white/20 text-white hover:bg-white/30 rounded-full transition-transform hover:scale-105 shadow-md">
               <PhoneCall className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
