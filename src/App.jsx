@@ -1043,6 +1043,10 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
   const [allUpdates, setAllUpdates] = useState([]);
   const [isLoadingUpdates, setIsLoadingUpdates] = useState(false);
 
+  const activeProjects = projects.filter(p => !p.isFinished);
+  const finishedProjects = projects.filter(p => p.isFinished);
+  const filteredActiveProjects = activeProjects.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredFinishedProjects = finishedProjects.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
   const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   useEffect(() => {
@@ -1216,9 +1220,9 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
               </div>
             ) : (
               <>
-                {filteredProjects.filter(p => !p.isFinished).map((project, index) => (
+                {filteredActiveProjects.map((project) => (
                   <ProjectAccordion 
-                    key={project.id} project={project} theme={body.theme} index={index} user={user} authError={authError} db={db}
+                    key={project.id} project={project} theme={body.theme} index={activeProjects.findIndex(p => p.id === project.id)} user={user} authError={authError} db={db}
                     allSubFolders={allSubFolders}
                     allUpdates={allUpdates.filter(u => u.projectId === project.id)} localUpdates={localUpdates.filter(u => u.projectId === project.id)}
                     isLoadingUpdates={isLoadingUpdates} setLocalUpdates={setLocalUpdates} setAllProjects={setAllProjects}
@@ -1237,9 +1241,9 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
                   </div>
                 )}
                 
-                {filteredProjects.filter(p => p.isFinished).map((project, index) => (
+                {filteredFinishedProjects.map((project) => (
                   <ProjectAccordion 
-                    key={project.id} project={project} theme={body.theme} index={index} user={user} authError={authError} db={db}
+                    key={project.id} project={project} theme={body.theme} index={finishedProjects.findIndex(p => p.id === project.id)} user={user} authError={authError} db={db}
                     allSubFolders={allSubFolders}
                     allUpdates={allUpdates.filter(u => u.projectId === project.id)} localUpdates={localUpdates.filter(u => u.projectId === project.id)}
                     isLoadingUpdates={isLoadingUpdates} setLocalUpdates={setLocalUpdates} setAllProjects={setAllProjects}
