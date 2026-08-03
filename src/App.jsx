@@ -1045,9 +1045,17 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
 
   const activeProjects = projects.filter(p => !p.isFinished);
   const finishedProjects = projects.filter(p => p.isFinished);
-  const filteredActiveProjects = activeProjects.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  const filteredFinishedProjects = finishedProjects.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  
+  const searchMatch = (p) => {
+    const searchLower = searchQuery.toLowerCase();
+    if (p.name.toLowerCase().includes(searchLower)) return true;
+    const projUpdates = allUpdates.filter(u => u.projectId === p.id);
+    return projUpdates.some(u => u.text && u.text.toLowerCase().includes(searchLower));
+  };
+
+  const filteredActiveProjects = activeProjects.filter(searchMatch);
+  const filteredFinishedProjects = finishedProjects.filter(searchMatch);
+  const filteredProjects = projects.filter(searchMatch);
 
   useEffect(() => {
     const handleEsc = (e) => { if (e.key === 'Escape') onClose(); };
