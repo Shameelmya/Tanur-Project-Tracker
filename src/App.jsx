@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { NotoSansMalayalamBase64 } from './fonts/NotoSansMalayalam';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from "firebase/app";
@@ -1069,7 +1070,12 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     
+    // Add Custom Font for Malayalam
+    doc.addFileToVFS('NotoSansMalayalam-Regular.ttf', NotoSansMalayalamBase64);
+    doc.addFont('NotoSansMalayalam-Regular.ttf', 'NotoSansMalayalam', 'normal');
+    
     // Header
+    doc.setFont('NotoSansMalayalam', 'normal');
     doc.setFontSize(18);
     doc.setTextColor(30, 41, 59); // slate-800
     doc.text(`Project Report: ${body.name}`, 14, 20);
@@ -1096,7 +1102,7 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
       // Project Title
       doc.setFontSize(14);
       doc.setTextColor(30, 41, 59);
-      doc.setFont("helvetica", "bold");
+      doc.setFont("NotoSansMalayalam", "normal");
       const projTitle = `${idx + 1}. ${proj.name}`;
       
       const splitTitle = doc.splitTextToSize(projTitle, pageWidth - 28);
@@ -1105,7 +1111,7 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
 
       // Status & Date
       doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
+      doc.setFont("NotoSansMalayalam", "normal");
       doc.setTextColor(100, 116, 139);
       const statusText = proj.isFinished ? "Completed" : "Active";
       const dateText = new Date(proj.createdAt).toLocaleDateString();
@@ -1132,8 +1138,8 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
           head: [['Date', 'Time', 'Update Notes']],
           body: tableData,
           theme: 'striped',
-          headStyles: { fillColor: [79, 70, 229] }, // indigo-600
-          styles: { fontSize: 9, cellPadding: 3 },
+          headStyles: { fillColor: [79, 70, 229], font: 'NotoSansMalayalam' }, // indigo-600
+          styles: { fontSize: 9, cellPadding: 3, font: 'NotoSansMalayalam' },
           columnStyles: {
             0: { cellWidth: 25 },
             1: { cellWidth: 22 },
@@ -1146,7 +1152,7 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
       } else {
         doc.setFontSize(10);
         doc.setTextColor(148, 163, 184); // slate-400
-        doc.setFont("helvetica", "italic");
+        doc.setFont("NotoSansMalayalam", "normal");
         doc.text("No updates for this project.", 14, startY);
         startY += 15;
       }
