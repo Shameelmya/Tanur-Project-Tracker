@@ -1039,8 +1039,11 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
   const [isAddingProject, setIsAddingProject] = useState(false);
   const [showContactsModal, setShowContactsModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [allUpdates, setAllUpdates] = useState([]);
   const [isLoadingUpdates, setIsLoadingUpdates] = useState(false);
+
+  const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   useEffect(() => {
     const handleEsc = (e) => { if (e.key === 'Escape') onClose(); };
@@ -1194,12 +1197,26 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
               </form>
             </div>
           )}
+          
+          <div className="mb-5 sm:mb-6">
+            <input 
+              type="text" 
+              placeholder="Search projects..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm shadow-sm"
+            />
+          </div>
+
           <div className="space-y-4">
-            {projects.length === 0 ? (
-              <div className="text-center py-12 text-slate-400"><FileText className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-base">No projects added yet.</p></div>
+            {filteredProjects.length === 0 ? (
+              <div className="text-center py-12 text-slate-400">
+                <FileText className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                <p className="text-base">{projects.length === 0 ? "No projects added yet." : "No matching projects found."}</p>
+              </div>
             ) : (
               <>
-                {projects.filter(p => !p.isFinished).map((project, index) => (
+                {filteredProjects.filter(p => !p.isFinished).map((project, index) => (
                   <ProjectAccordion 
                     key={project.id} project={project} theme={body.theme} index={index} user={user} authError={authError} db={db}
                     allSubFolders={allSubFolders}
@@ -1210,7 +1227,7 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
                   />
                 ))}
                 
-                {projects.some(p => p.isFinished) && (
+                {filteredProjects.some(p => p.isFinished) && (
                   <div className="pt-6 pb-2">
                     <div className="flex items-center gap-4">
                       <div className="h-px bg-slate-300 flex-1"></div>
@@ -1220,7 +1237,7 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
                   </div>
                 )}
                 
-                {projects.filter(p => p.isFinished).map((project, index) => (
+                {filteredProjects.filter(p => p.isFinished).map((project, index) => (
                   <ProjectAccordion 
                     key={project.id} project={project} theme={body.theme} index={index} user={user} authError={authError} db={db}
                     allSubFolders={allSubFolders}
