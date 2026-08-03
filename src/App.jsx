@@ -1066,10 +1066,17 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
 
   const generatePDF = async () => {
     let html = `
-      <div style="padding: 40px; font-family: system-ui, -apple-system, sans-serif; color: #1e293b;">
-        <h1 style="font-size: 24px; font-weight: bold; margin-bottom: 5px;">Project Report: ${body.name}</h1>
-        <p style="font-size: 14px; color: #64748b; margin-bottom: 5px;">Generated on: ${new Date().toLocaleString()}</p>
-        <p style="font-size: 14px; color: #64748b; margin-bottom: 30px;">Total Projects: ${projects.length}</p>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+Malayalam:wght@400;600;700&display=swap');
+      </style>
+      <div style="font-family: 'Noto Serif Malayalam', serif; color: #1e293b;">
+        <div style="border-bottom: 3px solid #4f46e5; padding-bottom: 15px; margin-bottom: 25px;">
+          <h1 style="font-size: 28px; font-weight: 700; color: #4f46e5; margin: 0 0 8px 0;">Project Report: ${body.name}</h1>
+          <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <p style="font-size: 13px; color: #64748b; margin: 0;">Generated on: ${new Date().toLocaleString()}</p>
+            <p style="font-size: 13px; font-weight: 600; color: #334155; margin: 0; background: #f1f5f9; padding: 4px 10px; border-radius: 4px;">Total Projects: ${projects.length}</p>
+          </div>
+        </div>
     `;
 
     const activeProjects = projects.filter(p => !p.isFinished);
@@ -1081,9 +1088,12 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
       const dateText = new Date(proj.createdAt).toLocaleDateString();
       
       html += `
-        <div style="margin-bottom: 30px; page-break-inside: avoid;">
-          <h2 style="font-size: 18px; font-weight: bold; margin-bottom: 5px;">${idx + 1}. ${proj.name}</h2>
-          <p style="font-size: 12px; color: #64748b; margin-bottom: 10px;">Status: ${statusText} | Created: ${dateText}</p>
+        <div style="margin-bottom: 30px; page-break-inside: avoid; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; background: #fafafa;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
+            <h2 style="font-size: 18px; font-weight: 700; color: #1e293b; margin: 0;">${idx + 1}. ${proj.name}</h2>
+            <span style="font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 4px; ${proj.isFinished ? 'background: #dcfce7; color: #166534;' : 'background: #dbeafe; color: #1e40af;'}">${statusText}</span>
+          </div>
+          <p style="font-size: 12px; color: #64748b; margin: 0 0 10px 0;">Created: ${dateText}</p>
       `;
 
       const projUpdates = allUpdates
@@ -1092,12 +1102,12 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
 
       if (projUpdates.length > 0) {
         html += `
-          <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px;">
+          <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; background: #ffffff; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <thead>
               <tr style="background-color: #4f46e5; color: white;">
-                <th style="padding: 8px; text-align: left; width: 25%;">Date</th>
-                <th style="padding: 8px; text-align: left; width: 20%;">Time</th>
-                <th style="padding: 8px; text-align: left;">Update Notes</th>
+                <th style="padding: 10px 12px; text-align: left; width: 22%; font-weight: 600;">Date</th>
+                <th style="padding: 10px 12px; text-align: left; width: 18%; font-weight: 600;">Time</th>
+                <th style="padding: 10px 12px; text-align: left; font-weight: 600;">Update Notes</th>
               </tr>
             </thead>
             <tbody>
@@ -1108,9 +1118,9 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
           const bg = i % 2 === 0 ? '#f8fafc' : '#ffffff';
           html += `
               <tr style="background-color: ${bg}; border-bottom: 1px solid #e2e8f0;">
-                <td style="padding: 8px;">${d.toLocaleDateString()}</td>
-                <td style="padding: 8px;">${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                <td style="padding: 8px;">${u.text || '(Image/Attachment)'}</td>
+                <td style="padding: 10px 12px; color: #334155;">${d.toLocaleDateString()}</td>
+                <td style="padding: 10px 12px; color: #334155;">${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                <td style="padding: 10px 12px; color: #1e293b; line-height: 1.5;">${u.text || '(Image/Attachment)'}</td>
               </tr>
           `;
         });
@@ -1132,7 +1142,7 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
     container.innerHTML = html;
     
     const opt = {
-      margin:       0,
+      margin:       [0.5, 0.5, 0.5, 0.5],
       filename:     `${body.name.replace(/\\s+/g, '_')}_Report.pdf`,
       image:        { type: 'jpeg', quality: 0.98 },
       html2canvas:  { scale: 2, useCORS: true },
