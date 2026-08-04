@@ -1096,17 +1096,16 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
 
     const activeProjects = projects.filter(p => !p.isFinished);
     const finishedProjects = projects.filter(p => p.isFinished);
-    const sortedProjects = [...activeProjects, ...finishedProjects];
+    
+    let globalIndex = 1;
 
-    sortedProjects.forEach((proj, idx) => {
-      const statusText = proj.isFinished ? "Completed" : "Active";
+    const renderProject = (proj) => {
       const dateText = new Date(proj.createdAt).toLocaleDateString();
       
       html += `
         <div style="margin-bottom: 15px; page-break-inside: avoid; border-bottom: 1px dashed #aaa; padding-bottom: 10px;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
-            <h2 style="font-size: 14px; font-weight: 700; margin: 0;">${idx + 1}. ${proj.name}</h2>
-            <span style="font-size: 10px; font-weight: 600; border: 1px solid #000; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; height: 16px; padding: 0 5px;">${statusText}</span>
+          <div style="margin-bottom: 4px;">
+            <h2 style="font-size: 14px; font-weight: 700; margin: 0;">${globalIndex}. ${proj.name}</h2>
           </div>
           <p style="font-size: 10px; margin: 0 0 6px 0;">Created: ${dateText}</p>
       `;
@@ -1128,7 +1127,18 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
       }
 
       html += `</div>`;
-    });
+      globalIndex++;
+    };
+
+    if (activeProjects.length > 0) {
+      html += `<h2 style="font-size: 16px; font-weight: 700; margin-bottom: 10px; margin-top: 15px; padding-bottom: 4px; border-bottom: 1px solid #000;">Active Projects</h2>`;
+      activeProjects.forEach(renderProject);
+    }
+    
+    if (finishedProjects.length > 0) {
+      html += `<h2 style="font-size: 16px; font-weight: 700; margin-bottom: 10px; margin-top: 25px; padding-bottom: 4px; border-bottom: 1px solid #000;">Completed Projects</h2>`;
+      finishedProjects.forEach(renderProject);
+    }
 
     html += `</div>`;
 
