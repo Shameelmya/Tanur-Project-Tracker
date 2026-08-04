@@ -1106,7 +1106,7 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
         <div style="margin-bottom: 15px; page-break-inside: avoid; border-bottom: 1px dashed #aaa; padding-bottom: 10px;">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
             <h2 style="font-size: 14px; font-weight: 700; margin: 0;">${idx + 1}. ${proj.name}</h2>
-            <span style="font-size: 10px; font-weight: 600; border: 1px solid #000; padding: 2px 4px; border-radius: 3px;">${statusText}</span>
+            <span style="font-size: 10px; font-weight: 600; border: 1px solid #000; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; height: 16px; padding: 0 5px;">${statusText}</span>
           </div>
           <p style="font-size: 10px; margin: 0 0 6px 0;">Created: ${dateText}</p>
       `;
