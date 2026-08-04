@@ -447,7 +447,7 @@ export default function App() {
     const projectsRef = collection(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects');
     const unsubProj = onSnapshot(projectsRef, (snap) => {
       const data = []; snap.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
-      data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      data.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
       setAllProjects(data);
     });
 
@@ -528,7 +528,7 @@ export default function App() {
   const handleAddProject = async (bodyIds, projectName) => {
     const projectId = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const projectData = { id: projectId, localBodyIds: Array.isArray(bodyIds) ? bodyIds : [bodyIds], name: projectName, createdAt: new Date().toISOString(), updateCount: 0 };
-    setAllProjects(prev => [projectData, ...prev]);
+    setAllProjects(prev => [...prev, projectData]);
     if (user && !authError) {
       try { await setDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'projects', projectId), projectData); } catch (err) { console.warn(err); }
     }
