@@ -1042,6 +1042,8 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
   const [searchQuery, setSearchQuery] = useState('');
   const [allUpdates, setAllUpdates] = useState([]);
   const [isLoadingUpdates, setIsLoadingUpdates] = useState(false);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [selectedPdfProjectIds, setSelectedPdfProjectIds] = useState([]);
 
   const activeProjects = projects.filter(p => !p.isFinished);
   const finishedProjects = projects.filter(p => p.isFinished);
@@ -1094,8 +1096,8 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
         </div>
     `;
 
-    const activeProjects = projects.filter(p => !p.isFinished);
-    const finishedProjects = projects.filter(p => p.isFinished);
+    const activeProjects = projects.filter(p => !p.isFinished && selectedPdfProjectIds.includes(p.id));
+    const finishedProjects = projects.filter(p => p.isFinished && selectedPdfProjectIds.includes(p.id));
     
     let globalIndex = 1;
 
@@ -1154,6 +1156,7 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
     };
 
     html2pdf().set(opt).from(container).save();
+    setIsPdfModalOpen(false);
   };
 
   const IconComponent = body.icon || Folder;
@@ -1167,7 +1170,7 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
             <p className="mt-1 text-white/80 font-medium text-xs sm:text-sm">Manage projects for this sub-folder.</p>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            <button onClick={generatePDF} className="p-2 sm:p-2.5 bg-white/20 text-white hover:bg-white/30 rounded-full transition-transform hover:scale-105 shadow-md" title="Print to PDF">
+            <button onClick={() => { setSelectedPdfProjectIds(projects.map(p => p.id)); setIsPdfModalOpen(true); }} className="p-2 sm:p-2.5 bg-white/20 text-white hover:bg-white/30 rounded-full transition-transform hover:scale-105 shadow-md" title="Print to PDF">
               <Printer className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
             <button onClick={() => setShowContactsModal(true)} className="p-2 sm:p-2.5 bg-white/20 text-white hover:bg-white/30 rounded-full transition-transform hover:scale-105 shadow-md">
@@ -1253,6 +1256,47 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
           </div>
         </div>
       </div>
+      {isPdfModalOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-4 bg-slate-50 border-b flex justify-between items-center shrink-0">
+              <h3 className="font-bold text-lg text-slate-800">Select Projects to Print</h3>
+              <button onClick={() => setIsPdfModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
+            </div>
+            <div className="p-3 flex gap-2 border-b bg-slate-50 shrink-0">
+              <button onClick={() => setSelectedPdfProjectIds(projects.map(p => p.id))} className="flex-1 py-1.5 px-3 bg-slate-200 hover:bg-slate-300 text-slate-800 text-sm font-semibold rounded transition-colors">Select All</button>
+              <button onClick={() => setSelectedPdfProjectIds([])} className="flex-1 py-1.5 px-3 bg-slate-200 hover:bg-slate-300 text-slate-800 text-sm font-semibold rounded transition-colors">Unselect All</button>
+            </div>
+            <div className="overflow-y-auto p-2 flex-1">
+              {projects.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-4">No projects available.</p>
+              ) : (
+                <div className="space-y-1">
+                  {projects.map((p, index) => (
+                    <label key={p.id} className="flex items-start gap-3 p-2.5 hover:bg-slate-50 rounded-lg cursor-pointer border border-transparent hover:border-slate-200 transition-colors">
+                      <input 
+                        type="checkbox" 
+                        className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        checked={selectedPdfProjectIds.includes(p.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedPdfProjectIds(prev => [...prev, p.id]);
+                          else setSelectedPdfProjectIds(prev => prev.filter(id => id !== p.id));
+                        }}
+                      />
+                      <span className="text-sm font-medium text-slate-700 leading-tight">{index + 1}. {p.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t bg-slate-50 shrink-0">
+              <button onClick={generatePDF} disabled={selectedPdfProjectIds.length === 0} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm">
+                <Printer className="w-4 h-4" /> Generate PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
