@@ -1084,12 +1084,12 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+Malayalam:wght@400;600;700&display=swap');
       </style>
-      <div style="font-family: 'Noto Serif Malayalam', serif; color: #1e293b;">
-        <div style="border-bottom: 3px solid #4f46e5; padding-bottom: 15px; margin-bottom: 25px;">
-          <h1 style="font-size: 28px; font-weight: 700; color: #4f46e5; margin: 0 0 8px 0;">Project Report: ${body.name}</h1>
+      <div style="font-family: 'Noto Serif Malayalam', serif; color: #000;">
+        <div style="border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px;">
+          <h1 style="font-size: 22px; font-weight: 700; margin: 0 0 5px 0;">Project Report: ${body.name}</h1>
           <div style="display: flex; justify-content: space-between; align-items: flex-end;">
-            <p style="font-size: 13px; color: #64748b; margin: 0;">Generated on: ${new Date().toLocaleString()}</p>
-            <p style="font-size: 13px; font-weight: 600; color: #334155; margin: 0; background: #f1f5f9; padding: 4px 10px; border-radius: 4px;">Total Projects: ${projects.length}</p>
+            <p style="font-size: 11px; margin: 0;">Generated on: ${new Date().toLocaleString()}</p>
+            <p style="font-size: 11px; font-weight: 600; margin: 0;">Total Projects: ${projects.length}</p>
           </div>
         </div>
     `;
@@ -1103,12 +1103,12 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
       const dateText = new Date(proj.createdAt).toLocaleDateString();
       
       html += `
-        <div style="margin-bottom: 30px; page-break-inside: avoid; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; background: #fafafa;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
-            <h2 style="font-size: 18px; font-weight: 700; color: #1e293b; margin: 0;">${idx + 1}. ${proj.name}</h2>
-            <span style="font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 4px; ${proj.isFinished ? 'background: #dcfce7; color: #166534;' : 'background: #dbeafe; color: #1e40af;'}">${statusText}</span>
+        <div style="margin-bottom: 15px; page-break-inside: avoid; border-bottom: 1px dashed #aaa; padding-bottom: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
+            <h2 style="font-size: 14px; font-weight: 700; margin: 0;">${idx + 1}. ${proj.name}</h2>
+            <span style="font-size: 10px; font-weight: 600; border: 1px solid #000; padding: 2px 4px; border-radius: 3px;">${statusText}</span>
           </div>
-          <p style="font-size: 12px; color: #64748b; margin: 0 0 10px 0;">Created: ${dateText}</p>
+          <p style="font-size: 10px; margin: 0 0 6px 0;">Created: ${dateText}</p>
       `;
 
       const projUpdates = allUpdates
@@ -1116,36 +1116,15 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
         .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
       if (projUpdates.length > 0) {
+        const lastUpdate = projUpdates[0];
+        const ud = new Date(lastUpdate.timestamp);
         html += `
-          <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; background: #ffffff; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <thead>
-              <tr style="background-color: #4f46e5; color: white;">
-                <th style="padding: 10px 12px; text-align: left; width: 22%; font-weight: 600;">Date</th>
-                <th style="padding: 10px 12px; text-align: left; width: 18%; font-weight: 600;">Time</th>
-                <th style="padding: 10px 12px; text-align: left; font-weight: 600;">Update Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-        `;
-        
-        projUpdates.forEach((u, i) => {
-          const d = new Date(u.timestamp);
-          const bg = i % 2 === 0 ? '#f8fafc' : '#ffffff';
-          html += `
-              <tr style="background-color: ${bg}; border-bottom: 1px solid #e2e8f0;">
-                <td style="padding: 10px 12px; color: #334155;">${d.toLocaleDateString()}</td>
-                <td style="padding: 10px 12px; color: #334155;">${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                <td style="padding: 10px 12px; color: #1e293b; line-height: 1.5;">${u.text || '(Image/Attachment)'}</td>
-              </tr>
-          `;
-        });
-        
-        html += `
-            </tbody>
-          </table>
+          <div style="font-size: 12px; line-height: 1.4;">
+            <strong>Latest Update (${ud.toLocaleDateString()} ${ud.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}):</strong> ${lastUpdate.text || '(Image/Attachment)'}
+          </div>
         `;
       } else {
-        html += `<p style="font-size: 12px; color: #94a3b8; font-style: italic;">No updates for this project.</p>`;
+        html += `<p style="font-size: 12px; font-style: italic; margin: 0;">No updates for this project.</p>`;
       }
 
       html += `</div>`;
