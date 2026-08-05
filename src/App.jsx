@@ -301,25 +301,42 @@ function StaffManagementModal({ onClose, staffUsers, db, allSubFolders, displayM
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [selectedFolders, setSelectedFolders] = useState([]);
+  const [editingStaffId, setEditingStaffId] = useState(null);
   
   const handleAddStaff = async (e) => {
     e.preventDefault();
     if (!username || !password) return;
-    const newStaff = {
+    const staffData = {
       username: username.trim(),
       password: password,
       role: 'staff',
       assignedFolderIds: selectedFolders,
-      createdAt: new Date().toISOString()
+      updatedAt: new Date().toISOString()
     };
     try {
-      const staffRef = collection(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'staff_users');
-      await setDoc(doc(staffRef), newStaff);
-      setUsername(''); setPassword(''); setSelectedFolders([]);
+      if (editingStaffId) {
+        await updateDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'staff_users', editingStaffId), staffData);
+      } else {
+        staffData.createdAt = new Date().toISOString();
+        const staffRef = collection(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'staff_users');
+        await setDoc(doc(staffRef), staffData);
+      }
+      resetForm();
     } catch (e) {
       console.error(e);
-      alert("Failed to add staff");
+      alert("Failed to save staff");
     }
+  };
+
+  const resetForm = () => {
+    setUsername(''); setPassword(''); setSelectedFolders([]); setEditingStaffId(null);
+  };
+
+  const startEdit = (staff) => {
+    setUsername(staff.username);
+    setPassword(staff.password);
+    setSelectedFolders(staff.assignedFolderIds || []);
+    setEditingStaffId(staff.id);
   };
 
   const handleDeleteStaff = async (id) => {
@@ -341,7 +358,7 @@ function StaffManagementModal({ onClose, staffUsers, db, allSubFolders, displayM
         </div>
         <div className="p-6 overflow-y-auto flex flex-col md:flex-row gap-6">
           <div className="flex-1">
-            <h3 className="font-bold text-lg mb-4 text-slate-800">Add New Staff</h3>
+            <h3 className="font-bold text-lg mb-4 text-slate-800">{editingStaffId ? 'Edit Staff Member' : 'Add New Staff'}</h3>
             <form onSubmit={handleAddStaff} className="space-y-4 bg-slate-50 p-5 rounded-xl border border-slate-200 shadow-sm">
               <div>
                 <label className="block text-sm font-semibold mb-1 text-slate-700">Name / Username</label>
@@ -368,7 +385,16 @@ function StaffManagementModal({ onClose, staffUsers, db, allSubFolders, displayM
                   ))}
                 </div>
               </div>
-              <button type="submit" className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors shadow-sm">Add Staff Member</button>
+              <div className="flex gap-2">
+                <button type="submit" className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors shadow-sm">
+                  {editingStaffId ? 'Save Changes' : 'Add Staff Member'}
+                </button>
+                {editingStaffId && (
+                  <button type="button" onClick={resetForm} className="py-2.5 px-4 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg transition-colors shadow-sm">
+                    Cancel
+                  </button>
+                )}
+              </div>
             </form>
           </div>
           <div className="flex-1">
@@ -392,7 +418,10 @@ function StaffManagementModal({ onClose, staffUsers, db, allSubFolders, displayM
                       )}
                     </div>
                   </div>
-                  <button onClick={() => handleDeleteStaff(staff.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"><Trash2 className="w-4 h-4"/></button>
+                  <div className="flex gap-1">
+                    <button onClick={() => startEdit(staff)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"><Edit3 className="w-4 h-4"/></button>
+                    <button onClick={() => handleDeleteStaff(staff.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"><Trash2 className="w-4 h-4"/></button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -459,18 +488,26 @@ function LoginScreen({ onLogin, staffUsers, authError }) {
 
         {!selectedUser ? (
           <div className="grid grid-cols-2 gap-4">
-            {allUsers.map((u, i) => (
-              <button
-                key={u.id || i}
-                onClick={() => setSelectedUser(u)}
-                className="flex flex-col items-center justify-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-200 transition-colors group shadow-sm"
-              >
-                <div className="w-12 h-12 bg-slate-200 text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-600 rounded-full flex items-center justify-center transition-colors">
-                  <User className="w-6 h-6" />
-                </div>
-                <span className="font-semibold text-slate-700 text-sm text-center">{u.username}</span>
-              </button>
-            ))}
+            {allUsers.map((u, i) => {
+              const isAdmin = u.id === 'admin';
+              return (
+                <button
+                  key={u.id || i}
+                  onClick={() => setSelectedUser(u)}
+                  className={`flex flex-col items-center justify-center gap-3 p-4 border rounded-xl transition-colors group shadow-sm ${
+                    isAdmin ? 'bg-indigo-600 border-indigo-700 hover:bg-indigo-700 text-white' : 'bg-slate-50 border-slate-200 hover:bg-indigo-50 hover:border-indigo-200'
+                  }`}
+                >
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
+                    isAdmin ? 'bg-white/20 text-white group-hover:bg-white/30' : 'bg-slate-200 text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-600'
+                  }`}>
+                    <User className="w-6 h-6" />
+                  </div>
+                  <span className={`font-semibold text-sm text-center ${isAdmin ? 'text-white' : 'text-slate-700'}`}>{u.username}</span>
+                  {isAdmin && <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full mt-[-6px]">Admin</span>}
+                </button>
+              );
+            })}
           </div>
         ) : (
           <form onSubmit={handleLogin} className="space-y-4">
@@ -937,10 +974,13 @@ export default function App() {
               Connected to Cloud DB
             </span>
             {(!loggedInUser || loggedInUser.role === 'admin') && (
-              <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-colors relative">
+              <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-colors relative" title="Settings">
                 <Settings className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             )}
+            <button onClick={() => setLoggedInUser(null)} className="p-2 bg-slate-100 hover:bg-red-100 text-slate-700 hover:text-red-600 rounded-full transition-colors relative" title="Log Out">
+              <LogOut className="w-5 h-5 sm:w-6 sm:h-6" />
+            </button>
             {isSettingsOpen && (
               <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl py-2 z-50 animate-in fade-in zoom-in-95">
                 <button onClick={() => { setIsSettingsOpen(false); setIsStaffModalOpen(true); }} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 text-left">
