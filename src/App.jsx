@@ -4,7 +4,7 @@ import {
   X, Plus, ChevronDown, Image as ImageIcon, 
   Send, Calendar, Clock, CheckCircle2, FileText, Loader2, AlertTriangle, HelpCircle,
   Edit3, Trash2, Paperclip, User, Users, Folder, Star, Zap, CheckSquare,
-  ArrowLeft, MoveRight, Briefcase, FolderTree, Settings, Download, Upload, Copy, PhoneCall, Printer
+  ArrowLeft, MoveRight, Briefcase, FolderTree, Settings, Download, Upload, Copy, PhoneCall, Printer, LogOut
 } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
 
