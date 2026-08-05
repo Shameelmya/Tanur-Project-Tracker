@@ -297,6 +297,186 @@ const getDayIndicator = () => {
   };
 };
 
+function StaffManagementModal({ onClose, staffUsers, db, allSubFolders, displayMainFolders }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [selectedFolders, setSelectedFolders] = useState([]);
+  
+  const handleAddStaff = async (e) => {
+    e.preventDefault();
+    if (!username || !password) return;
+    const newStaff = {
+      username: username.trim(),
+      password: password,
+      role: 'staff',
+      assignedFolderIds: selectedFolders,
+      createdAt: new Date().toISOString()
+    };
+    try {
+      const staffRef = collection(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'staff_users');
+      await setDoc(doc(staffRef), newStaff);
+      setUsername(''); setPassword(''); setSelectedFolders([]);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to add staff");
+    }
+  };
+
+  const handleDeleteStaff = async (id) => {
+    try {
+      await deleteDoc(doc(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'staff_users', id));
+    } catch (e) { console.error(e); }
+  };
+
+  const toggleFolder = (id) => {
+    setSelectedFolders(prev => prev.includes(id) ? prev.filter(fid => fid !== id) : [...prev, id]);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={onClose}>
+      <div className="bg-white max-w-4xl w-full max-h-[90vh] rounded-2xl flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="p-4 border-b flex justify-between items-center bg-slate-50 rounded-t-2xl shrink-0">
+          <h2 className="text-xl font-bold flex items-center gap-2"><Users className="w-6 h-6 text-indigo-600"/> Staff Management</h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><X className="w-5 h-5"/></button>
+        </div>
+        <div className="p-6 overflow-y-auto flex flex-col md:flex-row gap-6">
+          <div className="flex-1">
+            <h3 className="font-bold text-lg mb-4 text-slate-800">Add New Staff</h3>
+            <form onSubmit={handleAddStaff} className="space-y-4 bg-slate-50 p-5 rounded-xl border border-slate-200 shadow-sm">
+              <div>
+                <label className="block text-sm font-semibold mb-1 text-slate-700">Name / Username</label>
+                <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none" required />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1 text-slate-700">Password</label>
+                <input type="text" value={password} onChange={e => setPassword(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none" required />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-2 text-slate-700">Assign Folders</label>
+                <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-lg bg-white p-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {displayMainFolders.map(mf => (
+                    <label key={mf.id} className="flex items-center gap-2 text-sm p-2 hover:bg-indigo-50 rounded cursor-pointer border border-transparent hover:border-indigo-100 transition-colors">
+                      <input type="checkbox" checked={selectedFolders.includes(mf.id)} onChange={() => toggleFolder(mf.id)} className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"/>
+                      <span className="font-bold text-slate-800">{mf.name}</span>
+                    </label>
+                  ))}
+                  {allSubFolders.map(sf => (
+                    <label key={sf.id} className="flex items-center gap-2 text-sm p-2 hover:bg-emerald-50 rounded cursor-pointer ml-2 border-l-2 border-emerald-200">
+                      <input type="checkbox" checked={selectedFolders.includes(sf.id)} onChange={() => toggleFolder(sf.id)} className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"/>
+                      <span className="text-slate-700">{sf.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <button type="submit" className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors shadow-sm">Add Staff Member</button>
+            </form>
+          </div>
+          <div className="flex-1">
+            <h3 className="font-bold text-lg mb-4 text-slate-800">Current Staff</h3>
+            <div className="space-y-3">
+              {staffUsers.length === 0 && <p className="text-slate-500 text-sm italic bg-slate-50 p-4 rounded-xl border border-slate-200 text-center">No staff members found.</p>}
+              {staffUsers.map(staff => (
+                <div key={staff.id} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow flex justify-between items-start group">
+                  <div>
+                    <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                      <User className="w-4 h-4 text-indigo-500"/> {staff.username}
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-1 font-mono bg-slate-100 inline-block px-2 py-0.5 rounded">Pass: {staff.password}</p>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {staff.assignedFolderIds?.map(fid => {
+                        const folder = displayMainFolders.find(m => m.id === fid) || allSubFolders.find(s => s.id === fid);
+                        return folder ? <span key={fid} className="text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-full">{folder.name}</span> : null;
+                      })}
+                      {(!staff.assignedFolderIds || staff.assignedFolderIds.length === 0) && (
+                        <span className="text-[10px] text-slate-400 italic">No assigned folders</span>
+                      )}
+                    </div>
+                  </div>
+                  <button onClick={() => handleDeleteStaff(staff.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"><Trash2 className="w-4 h-4"/></button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LoginScreen({ onLogin, staffUsers, authError }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (username.trim() === 'PK Navas MLA' && password === 'Navas@2026') {
+      onLogin({ username: 'PK Navas MLA', role: 'admin', id: 'admin' });
+      return;
+    }
+    const staff = staffUsers.find(u => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password);
+    if (staff) {
+      onLogin(staff);
+      return;
+    }
+    setError('Invalid username or password.');
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
+        <div className="flex justify-center mb-6">
+          <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
+            <User className="w-8 h-8" />
+          </div>
+        </div>
+        <h1 className="text-2xl font-bold text-center text-slate-800 mb-2">Welcome Back</h1>
+        <p className="text-center text-slate-500 mb-8 text-sm">Please sign in to access the tracker.</p>
+        
+        {authError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm text-center">
+            Database connection error.
+          </div>
+        )}
+        
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm text-center">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">Username</label>
+            <input 
+              type="text" 
+              autoFocus
+              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">Password</label>
+            <input 
+              type="password" 
+              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+            />
+          </div>
+          <button 
+            type="submit" 
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors mt-2"
+          >
+            Sign In
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // Navigation State
   const [activeMainFolder, setActiveMainFolder] = useState(null);
@@ -311,6 +491,8 @@ export default function App() {
   const [localUpdates, setLocalUpdates] = useState([]); 
   const [customMainFolders, setCustomMainFolders] = useState([]);
   const [customCategories, setCustomCategories] = useState([]);
+  const [staffUsers, setStaffUsers] = useState([]);
+  const [loggedInUser, setLoggedInUser] = useState(null);
 
   // Modals & Dialogs
   const [isAddingMainFolderModalOpen, setIsAddingMainFolderModalOpen] = useState(false);
@@ -324,6 +506,7 @@ export default function App() {
   const [moveToDialog, setMoveToDialog] = useState(null);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
   const fileInputRef = useRef(null);
 
   const [linkProjectData, setLinkProjectData] = useState(null);
@@ -451,7 +634,13 @@ export default function App() {
       setAllProjects(data);
     });
 
-    return () => { unsubMain(); unsubCat(); unsubProj(); };
+    const staffRef = collection(db, 'artifacts', CANVAS_APP_ID, 'public', 'data', 'staff_users');
+    const unsubStaff = onSnapshot(staffRef, (snap) => {
+      const data = []; snap.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
+      setStaffUsers(data);
+    });
+
+    return () => { unsubMain(); unsubCat(); unsubProj(); unsubStaff(); };
   }, [user, authError]);
 
   // Merge Default & Custom Data
@@ -483,8 +672,22 @@ export default function App() {
     icon: sb.icon || ICON_MAP[sb.iconName] || Folder 
   }));
 
+  const filteredSubFolders = allSubFolders.filter(sb => {
+    if (!loggedInUser || loggedInUser.role === 'admin') return true;
+    return loggedInUser.assignedFolderIds?.includes(sb.id);
+  });
+
+  const filteredMainFolders = displayMainFolders.filter(mf => {
+    if (!loggedInUser || loggedInUser.role === 'admin') return true;
+    return loggedInUser.assignedFolderIds?.includes(mf.id) || filteredSubFolders.some(sb => sb.mainFolderId === mf.id);
+  });
+
+  if (!loggedInUser) {
+    return <LoginScreen onLogin={setLoggedInUser} staffUsers={staffUsers} authError={authError} />;
+  }
+
   // Filter SubFolders based on active Main Folder
-  const activeSubFolders = activeMainFolder ? allSubFolders.filter(f => f.mainFolderId === activeMainFolder.id) : [];
+  const activeSubFolders = activeMainFolder ? filteredSubFolders.filter(f => f.mainFolderId === activeMainFolder.id) : [];
 
   const getProjectCountForSubFolder = (subId) => allProjects.filter(p => p.localBodyIds?.includes(subId)).length;
   const getProjectCountForMainFolder = (mainId) => {
@@ -635,6 +838,7 @@ export default function App() {
       <LongPressable 
         as="div" key={item.id} delay={2000}
         onLongPress={() => {
+          if (loggedInUser && loggedInUser.role !== 'admin') return;
           const options = [
             { label: "Rename", icon: <Edit3 className="w-4 h-4"/>, onClick: () => handleRename(item, isMainFolder ? 'main_folders' : 'categories', isMainFolder ? setCustomMainFolders : setCustomCategories) },
             { label: "Weekly Update Day", icon: <Calendar className="w-4 h-4"/>, onClick: () => setWuDayFolder(item) },
@@ -712,11 +916,17 @@ export default function App() {
             <span className="text-[10px] sm:text-xs font-semibold bg-emerald-50 border border-emerald-100 text-emerald-800 px-2.5 py-1.5 rounded-full hidden md:block">
               Connected to Cloud DB
             </span>
-            <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-colors relative">
-              <Settings className="w-5 h-5 sm:w-6 sm:h-6" />
-            </button>
+            {(!loggedInUser || loggedInUser.role === 'admin') && (
+              <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-colors relative">
+                <Settings className="w-5 h-5 sm:w-6 sm:h-6" />
+              </button>
+            )}
             {isSettingsOpen && (
               <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl py-2 z-50 animate-in fade-in zoom-in-95">
+                <button onClick={() => { setIsSettingsOpen(false); setIsStaffModalOpen(true); }} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 text-left">
+                  <Users className="w-4 h-4" /> Manage Staff
+                </button>
+                <div className="h-px bg-slate-100 my-1"></div>
                 <button onClick={handleExportJSON} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 text-left">
                   <Download className="w-4 h-4" /> Export Backup (JSON)
                 </button>
@@ -734,30 +944,34 @@ export default function App() {
       <main className="flex-1 overflow-y-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 flex flex-col items-center">
         <div className="max-w-7xl w-full grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5 pb-6">
           {!activeMainFolder ? 
-            displayMainFolders.map(mf => renderCard(mf, true)) : 
+            filteredMainFolders.map(mf => renderCard(mf, true)) : 
             activeSubFolders.map(sub => renderCard(sub, false))
           }
         </div>
 
         {/* Add Button */}
-        <button 
-          onClick={() => { setNewNameInput(''); !activeMainFolder ? setIsAddingMainFolderModalOpen(true) : setIsAddingCategoryModalOpen(true); }} 
-          className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-full shadow-sm hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 hover:shadow-md transition-all text-xs sm:text-sm font-semibold mb-6 group"
-        >
-          <Plus className="w-4 h-4 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" /> 
-          Add New {!activeMainFolder ? 'Main Folder' : 'Sub Folder'}
-        </button>
+        {(!loggedInUser || loggedInUser.role === 'admin') && (
+          <button 
+            onClick={() => { setNewNameInput(''); !activeMainFolder ? setIsAddingMainFolderModalOpen(true) : setIsAddingCategoryModalOpen(true); }} 
+            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-full shadow-sm hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 hover:shadow-md transition-all text-xs sm:text-sm font-semibold mb-6 group"
+          >
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" /> 
+            Add New {!activeMainFolder ? 'Main Folder' : 'Sub Folder'}
+          </button>
+        )}
       </main>
 
       {/* Floating Quick Add Button */}
-      <button
-        onClick={() => setIsQuickAddModalOpen(true)}
-        className="fixed bottom-6 right-6 z-40 bg-indigo-600 text-white p-4 sm:px-6 sm:py-4 rounded-full shadow-xl hover:bg-indigo-700 hover:scale-105 transition-all group flex items-center justify-center gap-2"
-        title="Quick Add Project"
-      >
-        <Zap className="w-6 h-6 group-hover:animate-pulse" />
-        <span className="font-bold text-sm hidden sm:block pr-1">Quick Add</span>
-      </button>
+      {(!loggedInUser || loggedInUser.role === 'admin') && (
+        <button
+          onClick={() => setIsQuickAddModalOpen(true)}
+          className="fixed bottom-6 right-6 z-40 bg-indigo-600 text-white p-4 sm:px-6 sm:py-4 rounded-full shadow-xl hover:bg-indigo-700 hover:scale-105 transition-all group flex items-center justify-center gap-2"
+          title="Quick Add Project"
+        >
+          <Zap className="w-6 h-6 group-hover:animate-pulse" />
+          <span className="font-bold text-sm hidden sm:block pr-1">Quick Add</span>
+        </button>
+      )}
 
       {/* Global Modals & Dialogs */}
       {isQuickAddModalOpen && (
@@ -838,7 +1052,7 @@ export default function App() {
              </div>
              <p className="text-sm text-slate-600 mb-4">Select a destination for <strong>{moveToDialog.name}</strong>:</p>
              <div className="max-h-[50vh] overflow-y-auto space-y-2 pr-1">
-               {displayMainFolders.map(mf => (
+               {filteredMainFolders.map(mf => (
                  <button 
                    key={mf.id} 
                    disabled={mf.id === moveToDialog.mainFolderId}
@@ -859,10 +1073,21 @@ export default function App() {
       {promptDialog && <PromptDialog dialog={promptDialog} onClose={() => setPromptDialog(null)} />}
       {typeToDeleteDialog && <TypeToDeleteDialog dialog={typeToDeleteDialog} onClose={() => setTypeToDeleteDialog(null)} />}
 
+      {isStaffModalOpen && (
+        <StaffManagementModal 
+          onClose={() => setIsStaffModalOpen(false)}
+          staffUsers={staffUsers}
+          db={db}
+          allSubFolders={allSubFolders}
+          displayMainFolders={displayMainFolders}
+        />
+      )}
+
       {/* Project Modal (When Sub-folder is opened) */}
       {activeSubFolder && (
         <ProjectModal 
-          body={activeSubFolder} 
+          loggedInUser={loggedInUser}
+          body={activeSubFolder}  
           allSubFolders={allSubFolders}
           onClose={() => setActiveSubFolder(null)}
           projects={allProjects.filter(p => p.localBodyIds && p.localBodyIds.includes(activeSubFolder.id))}
@@ -1035,7 +1260,7 @@ function ContactListModal({ folder, onClose, onSaveContact, setActionMenu }) {
 }
 
 // --- PROJECT MODAL & ACCORDION (Preserved full logic) ---
-function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, user, authError, db, localUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData, onUpdateFolderContacts }) {
+function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, user, authError, db, localUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData, onUpdateFolderContacts, loggedInUser }) {
   const [isAddingProject, setIsAddingProject] = useState(false);
   const [showContactsModal, setShowContactsModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -1176,9 +1401,11 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
             <button onClick={() => setShowContactsModal(true)} className="p-2 sm:p-2.5 bg-white/20 text-white hover:bg-white/30 rounded-full transition-transform hover:scale-105 shadow-md">
               <PhoneCall className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
-            <button onClick={() => setIsAddingProject(!isAddingProject)} className="p-2 sm:p-2.5 bg-white text-slate-900 hover:bg-slate-100 rounded-full transition-transform hover:scale-105 shadow-md">
-              <Plus className={`w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 ${isAddingProject ? 'rotate-45' : ''}`} />
-            </button>
+            {(!loggedInUser || loggedInUser.role === 'admin') && (
+              <button onClick={() => setIsAddingProject(!isAddingProject)} className="p-2 sm:p-2.5 bg-white text-slate-900 hover:bg-slate-100 rounded-full transition-transform hover:scale-105 shadow-md">
+                <Plus className={`w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 ${isAddingProject ? 'rotate-45' : ''}`} />
+              </button>
+            )}
             <button onClick={onClose} className="p-2 sm:p-2.5 bg-black/20 hover:bg-black/30 text-white rounded-full transition-colors backdrop-blur-sm"><X className="w-5 h-5 sm:w-6 sm:h-6" /></button>
           </div>
         </div>
@@ -1222,6 +1449,7 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
               <>
                 {filteredActiveProjects.map((project) => (
                   <ProjectAccordion 
+                    loggedInUser={loggedInUser}
                     key={project.id} project={project} theme={body.theme} index={activeProjects.findIndex(p => p.id === project.id)} user={user} authError={authError} db={db}
                     allSubFolders={allSubFolders}
                     allUpdates={allUpdates.filter(u => u.projectId === project.id)} localUpdates={localUpdates.filter(u => u.projectId === project.id)}
@@ -1243,6 +1471,7 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
                 
                 {filteredFinishedProjects.map((project) => (
                   <ProjectAccordion 
+                    loggedInUser={loggedInUser}
                     key={project.id} project={project} theme={body.theme} index={finishedProjects.findIndex(p => p.id === project.id)} user={user} authError={authError} db={db}
                     allSubFolders={allSubFolders}
                     allUpdates={allUpdates.filter(u => u.projectId === project.id)} localUpdates={localUpdates.filter(u => u.projectId === project.id)}
@@ -1301,7 +1530,7 @@ function ProjectModal({ body, allSubFolders, onClose, projects, onAddProject, us
   );
 }
 
-function ProjectAccordion({ project, theme, index, user, authError, db, allSubFolders, allUpdates, localUpdates, isLoadingUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData }) {
+function ProjectAccordion({ project, theme, index, user, authError, db, allSubFolders, allUpdates, localUpdates, isLoadingUpdates, setLocalUpdates, setAllProjects, setActionMenu, setConfirmDialog, setPromptDialog, setLinkProjectData, loggedInUser }) {
   const [isOpen, setIsOpen] = useState(false);
   const [updateText, setUpdateText] = useState('');
   const [attachments, setAttachments] = useState([]);
@@ -1437,6 +1666,7 @@ function ProjectAccordion({ project, theme, index, user, authError, db, allSubFo
   };
 
   const handleProjectActions = () => {
+    if (loggedInUser && loggedInUser.role !== 'admin') return;
     setActionMenu({ title: "Project Options", options: [
       { label: project.isFinished ? "Mark as Active" : "Mark as Finished", icon: <CheckCircle2 className="w-4 h-4"/>, onClick: async () => {
         const newStatus = !project.isFinished;
