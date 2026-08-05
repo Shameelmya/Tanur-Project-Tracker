@@ -404,34 +404,46 @@ function StaffManagementModal({ onClose, staffUsers, db, allSubFolders, displayM
 }
 
 function LoginScreen({ onLogin, staffUsers, authError }) {
-  const [username, setUsername] = useState('');
+  const [selectedUser, setSelectedUser] = useState(null);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
+  const adminUser = { username: 'PK Navas MLA', role: 'admin', id: 'admin', password: 'Navas@2026' };
+  const allUsers = [adminUser, ...staffUsers];
+
   const handleLogin = (e) => {
     e.preventDefault();
-    if (username.trim() === 'PK Navas MLA' && password === 'Navas@2026') {
-      onLogin({ username: 'PK Navas MLA', role: 'admin', id: 'admin' });
-      return;
+    if (!selectedUser) return;
+    
+    if (password === selectedUser.password) {
+      onLogin(selectedUser);
+    } else {
+      setError('Invalid password.');
     }
-    const staff = staffUsers.find(u => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password);
-    if (staff) {
-      onLogin(staff);
-      return;
-    }
-    setError('Invalid username or password.');
   };
 
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8 relative">
+        {selectedUser && (
+          <button 
+            onClick={() => { setSelectedUser(null); setPassword(''); setError(''); }}
+            className="absolute top-6 left-6 p-2 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-full transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+        )}
         <div className="flex justify-center mb-6">
           <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
             <User className="w-8 h-8" />
           </div>
         </div>
-        <h1 className="text-2xl font-bold text-center text-slate-800 mb-2">Welcome Back</h1>
-        <p className="text-center text-slate-500 mb-8 text-sm">Please sign in to access the tracker.</p>
+        <h1 className="text-2xl font-bold text-center text-slate-800 mb-2">
+          {selectedUser ? `Welcome, ${selectedUser.username}` : "Who is logging in?"}
+        </h1>
+        <p className="text-center text-slate-500 mb-8 text-sm">
+          {selectedUser ? "Please enter your password to continue." : "Select your profile to access the tracker."}
+        </p>
         
         {authError && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm text-center">
@@ -445,33 +457,41 @@ function LoginScreen({ onLogin, staffUsers, authError }) {
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">Username</label>
-            <input 
-              type="text" 
-              autoFocus
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              value={username}
-              onChange={e => setUsername(e.target.value)}
-            />
+        {!selectedUser ? (
+          <div className="grid grid-cols-2 gap-4">
+            {allUsers.map((u, i) => (
+              <button
+                key={u.id || i}
+                onClick={() => setSelectedUser(u)}
+                className="flex flex-col items-center justify-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-200 transition-colors group shadow-sm"
+              >
+                <div className="w-12 h-12 bg-slate-200 text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-600 rounded-full flex items-center justify-center transition-colors">
+                  <User className="w-6 h-6" />
+                </div>
+                <span className="font-semibold text-slate-700 text-sm text-center">{u.username}</span>
+              </button>
+            ))}
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">Password</label>
-            <input 
-              type="password" 
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-            />
-          </div>
-          <button 
-            type="submit" 
-            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors mt-2"
-          >
-            Sign In
-          </button>
-        </form>
+        ) : (
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Password</label>
+              <input 
+                type="password" 
+                autoFocus
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+              />
+            </div>
+            <button 
+              type="submit" 
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors mt-2"
+            >
+              Sign In
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );
